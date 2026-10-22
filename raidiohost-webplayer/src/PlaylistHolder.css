@@ -1,0 +1,108 @@
+.playlist-holder {
+    display: flex;
+    flex: 0 0 206px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 11px;
+    margin: 0;
+    padding: 13px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--social-bg);
+    box-shadow: var(--shadow);
+    text-align: left;
+    scroll-snap-align: start;
+    box-sizing: border-box;
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.playlist-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.playlist-cover-fallback {
+    display: grid;
+    place-items: center;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 48px;
+}
+
+.playlist-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    min-width: 0;
+}
+
+.playlist-name {
+    margin: 0;
+    color: var(--text-h);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.playlist-meta {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.playlist-play-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: var(--accent);
+    color: white;
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.15s ease;
+}
+
+.playlist-play-btn:hover:not(:disabled) {
+    opacity: 0.92;
+}
+
+.playlist-play-btn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.playlist-play-btn--loading {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.playlist-play-btn .play-button-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.playlist-spinner {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: playlist-spin 0.7s linear infinite;
+}
+
+@keyframes playlist-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}

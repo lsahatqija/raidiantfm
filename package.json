@@ -1,0 +1,21 @@
+{
+  "name": "raidiantfm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A personal radio experience combining Spotify playback with spoken RSS topics.",
+  "workspaces": [
+    "raidiohost-node",
+    "raidiohost-webplayer"
+  ],
+  "scripts": {
+    "dev:server": "npm run start --workspace=raidiohost-node",
+    "dev:web": "npm run dev --workspace=raidiohost-webplayer",
+    "start": "npm run start --workspace=raidiohost-node",
+    "build": "npm run build --workspace=raidiohost-webplayer",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

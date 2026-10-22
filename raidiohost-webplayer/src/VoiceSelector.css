@@ -1,0 +1,221 @@
+.voice-selector {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.voice-selector-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.voice-selector-trigger:hover {
+  background: var(--accent-bg);
+}
+
+.voice-selector-icon {
+  font-size: 11px;
+}
+
+.voice-selector-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-selector-personality-badge {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.7;
+  background: var(--accent-bg);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.voice-selector-arrow {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* ── Panel ─────────────────────────────────────────────────────────────── */
+
+.voice-selector-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 200;
+  width: 270px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.voice-selector-section-label {
+  padding: 8px 14px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.6;
+  border-top: 1px solid var(--border);
+}
+
+.voice-selector-panel > .voice-selector-section-label:first-child {
+  border-top: none;
+  padding-top: 10px;
+}
+
+/* ── Voice list ────────────────────────────────────────────────────────── */
+
+.voice-selector-voice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.voice-selector-voice-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.voice-selector-voice-item:hover {
+  background: var(--accent-bg);
+}
+
+.voice-selector-voice-item--active {
+  background: var(--accent-bg);
+}
+
+.voice-selector-voice-name {
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-selector-voice-lang {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.voice-selector-voice-default {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.voice-selector-check {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.voice-selector-loading {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.5;
+}
+
+/* ── Sliders ────────────────────────────────────────────────────────────── */
+
+.voice-selector-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 8px;
+}
+
+.voice-selector-slider {
+  flex: 1 1 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.voice-selector-slider-value {
+  flex: 0 0 40px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+/* ── Personality select ─────────────────────────────────────────────────── */
+
+.voice-selector-personality-row {
+  padding: 4px 14px 8px;
+}
+
+.voice-selector-personality-select {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.voice-selector-personality-select:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+/* ── Test button ────────────────────────────────────────────────────────── */
+
+.voice-selector-test-row {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.voice-selector-test-btn {
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: center;
+}
+
+.voice-selector-test-btn:hover {
+  background: var(--accent-border);
+}
