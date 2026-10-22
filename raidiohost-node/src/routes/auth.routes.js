@@ -22,7 +22,7 @@ router.get('/callback', async (req, res) => {
     const error = req.query.error;
 
     if (error) {
-        console.error('Callback Error:', error);
+        console.error('Spotify authorization callback was denied');
         return res.send(`Callback Error: ${error}`);
     }
 
@@ -87,7 +87,7 @@ router.get('/callback', async (req, res) => {
             const data = await spotifyApi.refreshAccessToken();
             const accessToken = data.body['access_token'];
             spotifyApi.setAccessToken(accessToken);
-            console.log('The access token has been refreshed!');
+            console.log('Spotify access token refreshed');
 
             // Keep stored token in sync — non-fatal if it fails.
             try {
@@ -111,8 +111,6 @@ router.get('/callback', async (req, res) => {
             expiresIn: expiresIn
         };
         
-        console.log('Authorization granted. Stringified json:', JSON.stringify(jsondata));
-
         return res.send(`
             <!doctype html>
             <html>
@@ -135,9 +133,9 @@ router.get('/callback', async (req, res) => {
             </html>
         `);
     })
-    .catch(error => {
-        console.error('Error getting Tokens:', error);
-        res.status(500).send(`Error getting Tokens: ${error}`);
+    .catch(_error => {
+        console.error('Spotify token exchange failed');
+        res.status(500).send('Error getting Spotify tokens');
     });    
 });
 
@@ -170,7 +168,7 @@ router.post('/refresh', async (req, res) => {
 
         return res.json({ accessToken, expiresIn });
     } catch (err) {
-        console.error('Token refresh failed:', err);
+        console.error('Spotify token refresh failed with status:', err?.statusCode ?? 400);
         return res.status(err.statusCode ?? 400).json({ error: err.message ?? 'Token refresh failed' });
     }
 });
@@ -201,10 +199,7 @@ router.get('/tokens', (req, res) => {
         spotifyApi.setAccessToken(accessToken);
         spotifyApi.setRefreshToken(refreshToken);
 
-        console.log('Authorization Code:', code);
-        console.log('Access Token:', accessToken);
-        console.log('Refresh Token:', refreshToken);
-        console.log(`Successfully retrieved access token. Expires in ${expiresIn} s.`);
+        console.log('Spotify token exchange completed');
 
         return res.json({
             accessToken,
@@ -212,8 +207,8 @@ router.get('/tokens', (req, res) => {
             expiresIn
         });
     })
-    .catch(error => {
-        console.error('Error getting Tokens:', error);
+    .catch(_error => {
+        console.error('Spotify token exchange failed');
         res.status(500).json({ error: 'Error getting Tokens' });
     });
 });

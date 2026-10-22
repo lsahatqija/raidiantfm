@@ -4,12 +4,11 @@ import { SERVER_BASE } from "../utils/constants";
 export function useTopics(accessToken) {
   const [allTopics, setAllTopics] = useState([]);
   const [subscribedIds, setSubscribedIds] = useState(new Set());
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadedToken, setLoadedToken] = useState(null);
   const [togglingIds, setTogglingIds] = useState(new Set());
 
   const fetchTopics = useCallback(async () => {
     if (!accessToken) return;
-    setIsLoading(true);
     try {
       const headers = { Authorization: `Bearer ${accessToken}` };
       const [allRes, myRes] = await Promise.all([
@@ -34,12 +33,12 @@ export function useTopics(accessToken) {
     } catch {
       // silent — topics are optional enrichment
     } finally {
-      setIsLoading(false);
+      setLoadedToken(accessToken);
     }
   }, [accessToken]);
 
   useEffect(() => {
-    fetchTopics();
+    queueMicrotask(fetchTopics);
   }, [fetchTopics]);
 
   const toggleTopic = useCallback(
@@ -80,6 +79,8 @@ export function useTopics(accessToken) {
     },
     [accessToken],
   );
+
+  const isLoading = Boolean(accessToken && loadedToken !== accessToken);
 
   return { allTopics, subscribedIds, isLoading, togglingIds, toggleTopic };
 }

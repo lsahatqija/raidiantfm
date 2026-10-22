@@ -12,8 +12,13 @@
     "dev:web": "npm run dev --workspace=raidiohost-webplayer",
     "start": "npm run start --workspace=raidiohost-node",
     "build": "npm run build --workspace=raidiohost-webplayer",
+    "check": "npm run lint && npm test && npm run build",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "test:e2e": "node scripts/run-e2e.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   },
   "engines": {
     "node": ">=22"

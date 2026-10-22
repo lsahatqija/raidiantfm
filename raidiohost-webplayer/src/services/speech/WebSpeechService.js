@@ -1,5 +1,17 @@
 import { SpeechService } from "./SpeechService";
 
+const DEFAULT_VOICE_PROFILE = Object.freeze({
+  preferredVoiceKeywords: [],
+  fallbackKeywords: [],
+  rate: 1,
+  pitch: 1,
+  volume: 1,
+});
+
+function getProfileById() {
+  return DEFAULT_VOICE_PROFILE;
+}
+
 /**
  * Web Speech API implementation of SpeechService.
  * Uses window.speechSynthesis (built into modern browsers).

@@ -1,13 +1,17 @@
+# syntax=docker/dockerfile:1
 FROM node:22-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+COPY raidiohost-node/package.json raidiohost-node/package.json
+COPY raidiohost-webplayer/package.json raidiohost-webplayer/package.json
 
-COPY src ./src
-RUN chown -R node:node /app
+RUN npm ci --omit=dev --workspace=raidiohost-node --include-workspace-root=false
 
+COPY --chown=node:node raidiohost-node/src raidiohost-node/src
+
+WORKDIR /app/raidiohost-node
 USER node
 
 ENV NODE_ENV=production

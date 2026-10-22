@@ -24,9 +24,6 @@ export function useUserProfile(accessToken) {
 
   useEffect(() => {
     if (!accessToken) {
-      setUserProfile(null);
-      setIsProfileLoading(false);
-      setProfileError("");
       return undefined;
     }
 
@@ -307,10 +304,10 @@ export function useUserProfile(accessToken) {
   }, []);
 
   return {
-    userProfile,
+    userProfile: accessToken ? userProfile : null,
     setUserProfile,
-    isProfileLoading,
-    profileError,
+    isProfileLoading: accessToken ? isProfileLoading : false,
+    profileError: accessToken ? profileError : "",
     isEditingName,
     editNameValue,
     setEditNameValue,

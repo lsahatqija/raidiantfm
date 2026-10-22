@@ -50,6 +50,6 @@ module.exports = function(app){
     //app.use(speedLimiter);
 
     if (!process.env.JWT_KEY){
-        throw new Exception("FATAL ERROR: JWT_KEY is not defined!");
+        throw new Error("FATAL ERROR: JWT_KEY is not defined!");
     }
 }

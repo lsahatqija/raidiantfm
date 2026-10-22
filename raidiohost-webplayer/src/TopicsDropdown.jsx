@@ -34,13 +34,11 @@ export function TopicsDropdown({ accessToken }) {
   }, [sortedTopics, search]);
 
   useEffect(() => {
-    if (!isOpen) {
-      setSearch("");
-      return;
-    }
+    if (!isOpen) return;
     setTimeout(() => searchRef.current?.focus(), 0);
     function handleClickOutside(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setSearch("");
         setIsOpen(false);
       }
     }
@@ -50,7 +48,10 @@ export function TopicsDropdown({ accessToken }) {
 
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "Escape") {
+        setSearch("");
+        setIsOpen(false);
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -63,7 +64,10 @@ export function TopicsDropdown({ accessToken }) {
       <button
         type="button"
         className="topics-dropdown-trigger"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          if (isOpen) setSearch("");
+          setIsOpen((prev) => !prev);
+        }}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={`Radio topics${subscribedCount > 0 ? `, ${subscribedCount} subscribed` : ""}`}

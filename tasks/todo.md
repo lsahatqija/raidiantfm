@@ -10,8 +10,8 @@ Implementation is intentionally gated on approval of `tasks/plan.md` and the pro
 
 **Acceptance criteria:**
 - [ ] Spotify secret, MongoDB credential, and session/encryption secrets are newly issued.
-- [ ] `.env` is ignored and untracked; `.env.example` contains names and safe documentation only.
-- [ ] A coordinated decision is recorded for Git-history cleanup if any remote/collaborator received the file.
+- [x] `.env` is ignored and untracked; `.env.example` contains names and safe documentation only.
+- [x] A coordinated decision is recorded for Git-history cleanup if any remote/collaborator received the file.
 
 **Verification:** `git ls-files .env` is empty; secret scan of tracked files/staged diff is clean; old credentials fail.
 
@@ -22,9 +22,9 @@ Implementation is intentionally gated on approval of `tasks/plan.md` and the pro
 **Description:** Establish backend unit/integration tests, frontend hook/component tests, and browser E2E with mocked Spotify so auth behavior is deterministic.
 
 **Acceptance criteria:**
-- [ ] Both packages have working `lint`, `test`, and build/static-check scripts where applicable.
-- [ ] Mongo/Spotify test doubles and isolated environment configuration are documented.
-- [ ] Current frontend lint errors are fixed without behavior regressions.
+- [x] Both packages have working `lint`, `test`, and build/static-check scripts where applicable.
+- [x] Mongo/Spotify test doubles and isolated environment configuration are documented.
+- [x] Current frontend lint errors are fixed without behavior regressions.
 
 **Verification:** Run both package lint/test commands and frontend production build in CI mode.
 
@@ -35,18 +35,38 @@ Implementation is intentionally gated on approval of `tasks/plan.md` and the pro
 **Description:** Write an integration/E2E test that interleaves User A and User B login/API calls and demonstrates the singleton-client failure before replacing it.
 
 **Acceptance criteria:**
-- [ ] The test covers profile plus one Spotify data route and one radio/topic route.
-- [ ] It fails against the current implementation for the expected cross-user reason.
-- [ ] Test fixtures contain no real Spotify credentials.
+- [x] The test covers profile plus one Spotify data route and one radio/topic route.
+- [x] It fails against the current implementation for the expected cross-user reason.
+- [x] Test fixtures contain no real Spotify credentials.
 
 **Verification:** Run the focused regression and retain the failing assertion in the task record.
 
 **Dependencies:** Task 2. **Scope:** S. **Likely files:** backend auth integration test, Spotify mock helper.
 
+### Task 3A: Add the distributed container baseline
+
+**Description:** Run the webplayer, backend, and MongoDB as separate Compose
+services while preserving the root npm workspace as the only installation
+boundary.
+
+**Acceptance criteria:**
+- [x] Compose defines independently restartable webplayer, backend, and database containers.
+- [x] MongoDB data uses a named volume and the database is not published to the host.
+- [x] The webplayer proxies `/auth` and `/api` to the backend on a private network.
+- [x] Builds use the root lockfile with `npm ci`; no nested lockfile is created.
+- [x] Startup orders MongoDB health, backend health, then webplayer health.
+- [x] Runtime credentials are injected from ignored environment files and are not copied into images.
+
+**Verification:** `docker compose config --no-env-resolution`, clean image builds, service health, and a
+request to `http://127.0.0.1:8080` plus a proxied API route.
+
+**Dependencies:** Task 1 environment examples. **Scope:** S. **Likely files:**
+`compose.yaml`, both Dockerfiles, Nginx config, `.dockerignore`, operations record.
+
 ## Checkpoint A
 
 - [ ] Credentials are rotated/untracked and raw token logging is disabled.
-- [ ] Quality commands execute and the isolation bug has a reproducible test.
+- [x] Quality commands execute and the isolation bug has a reproducible test.
 
 ## Phase 1: Identity and session foundation
 

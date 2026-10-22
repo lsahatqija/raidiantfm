@@ -10,7 +10,7 @@ export function useAuth() {
 
   const refreshTimerRef = useRef(null);
 
-  const scheduleTokenRefresh = useCallback((expiresAt) => {
+  const scheduleTokenRefresh = useCallback(function schedule(expiresAt) {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     const delay = expiresAt - Date.now() - 60_000;
     if (delay <= 0) return;
@@ -31,7 +31,7 @@ export function useAuth() {
         const ttl = data.expiresIn ?? 3600;
         saveAuthTokens(data.accessToken, storedRefreshToken, ttl);
         setAccessToken(data.accessToken);
-        scheduleTokenRefresh(Date.now() + ttl * 1000);
+        schedule(Date.now() + ttl * 1000);
       } catch (err) {
         console.error("Silent token refresh failed:", err);
         setAccessToken(null);

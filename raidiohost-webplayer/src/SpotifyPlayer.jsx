@@ -47,11 +47,15 @@ export default function SpotifyPlayer({
     const [playerState, setPlayerState] = useState(null);
     const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState(null);
-    const [volume, setVolume] = useState(() => clampVolume(initialVolume));
+    const [volumeOverride, setVolumeOverride] = useState(null);
     const [positionMs, setPositionMs] = useState(0);
+    const volume = volumeOverride ?? clampVolume(initialVolume);
 
     useEffect(() => {
         volumeRef.current = volume;
+        if (!hasUserAdjustedVolumeRef.current) {
+            playerRef.current?.setVolume(volume);
+        }
     }, [volume]);
 
     const formatTime = (ms = 0) => {
@@ -60,16 +64,6 @@ export default function SpotifyPlayer({
         const seconds = totalSeconds % 60;
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
-
-    useEffect(() => {
-        if (hasUserAdjustedVolumeRef.current) {
-            return;
-        }
-
-        const nextVolume = clampVolume(initialVolume);
-        setVolume(nextVolume);
-        playerRef.current?.setVolume(nextVolume);
-    }, [initialVolume]);
 
     useEffect(() => {
         if (!accessToken) return;
@@ -318,7 +312,7 @@ export default function SpotifyPlayer({
                             onChange={(e) => {
                                 const v = parseFloat(e.target.value);
                                 hasUserAdjustedVolumeRef.current = true;
-                                setVolume(v);
+                                setVolumeOverride(v);
                                 playerRef.current?.setVolume(v);
                                 onVolumeChange?.(v);
                             }}
@@ -329,7 +323,7 @@ export default function SpotifyPlayer({
                             onClick={() => {
                                 const newVol = volume > 0 ? 0 : 0.5;
                                 hasUserAdjustedVolumeRef.current = true;
-                                setVolume(newVol);
+                                setVolumeOverride(newVol);
                                 playerRef.current?.setVolume(newVol);
                                 onVolumeChange?.(newVol);
                             }}

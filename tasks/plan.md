@@ -14,8 +14,36 @@ Turn the existing split Express/MongoDB + React/Vite application into a tenant-s
 | `pwa-shell` | Installability, caching, offline behavior, updates, mobile UX | stable authenticated web app |
 | `system-media` | OS media metadata and lock-screen/notification controls | `spotify-gateway`, `pwa-shell` |
 | `native-widgets` | Optional iOS/Android widgets and deep links | proven PWA, stable session/API contract |
+| `container-platform` | Compose topology for independently replaceable webplayer, API, and MongoDB containers | root workspace lockfile, runtime configuration |
 
 Build order: `identity-session` -> `spotify-gateway` -> `radio-personalization` -> `pwa-shell` -> `system-media` -> optional `native-widgets`.
+
+## Container Topology
+
+The deployable baseline is a three-service Docker Compose application:
+
+```text
+host :8080 -> webplayer (Nginx + static Vite build)
+                    |-- /auth/* -> backend:3050
+                    `-- /api/*  -> backend:3050
+                                      |
+                                      `-> db:27017 (private data network + volume)
+```
+
+- Images build from the repository root so both workspaces use the authoritative
+  root `package-lock.json` with `npm ci`; nested lockfiles remain forbidden.
+- MongoDB is reachable only on the private Compose data network and stores data in
+  the named `mongo-data` volume. The backend joins the app and data networks; the
+  webplayer joins only the app network.
+- Compose waits for MongoDB health before starting the backend and for backend
+  health before starting Nginx. Containers remain independently restartable and
+  replaceable.
+- Nginx presents one browser origin and proxies API/auth traffic, matching the
+  target cookie-session architecture. Only the webplayer port binds to the host.
+- Local credentials come from ignored environment files and are never copied into
+  image layers. Production deployments must use their platform's secret manager,
+  HTTPS ingress, a non-root application database user, and pinned/updated image
+  policy.
 
 ## Current Architecture
 
@@ -54,7 +82,7 @@ The data model is already per Spotify user, but the execution model is not: the 
 
 ### High: security and privacy
 
-1. `raidiohost-node/.env` is tracked by Git. All credentials present in it must be considered exposed; remove it from tracking, rotate them, and coordinate history cleanup if the repository was ever shared.
+1. `raidiohost-node/.env` was reported as tracked in the pre-consolidation repository. It is ignored and untracked in the current root, whose reachable history contains no `.env` commit, but every previously shared credential remains exposed until provider-side rotation is verified. Legacy remotes still require coordinated history cleanup if they received the file.
 2. Custom RSS URLs are fetched server-side with only a scheme check. The existing TODO correctly identifies an SSRF path; redirects, private/reserved IPs, DNS rebinding, response size, and timeout are not controlled.
 3. Authentication endpoints and external-fetch endpoints have no rate limiting. CORS allows hard-coded development origins, permits originless requests, and can throw if `CORS_ORIGINS` is absent.
 4. IP-derived location is obtained over plain HTTP and without an explicit consent/retention design. `X-Forwarded-For` trust and `trust proxy = 2` are deployment-specific but hard-coded.
@@ -154,6 +182,8 @@ The first widget should be glanceable and honest: current/last track, station st
 - Stop tracking `.env`, add `.env.example`, and decide whether repository history must be rewritten with collaborators coordinated.
 - Remove every token/code log and retire `/auth/token` and `/auth/tokens` behind a migration flag or in the same release as the new session flow.
 - Add test runners and capture the failing two-user scenario before changing behavior.
+- Add the webplayer/backend/MongoDB Compose topology, root-lockfile Docker builds,
+  private service networks, persistent database storage, and health-aware startup.
 
 Checkpoint: no secrets in the current tree/staged diff; a test demonstrates that User A can be replaced by User B today.
 

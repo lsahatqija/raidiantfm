@@ -10,9 +10,6 @@ export function usePlaylists(accessToken) {
 
   useEffect(() => {
     if (!accessToken) {
-      setPlaylists([]);
-      setPlaylistsOffset(0);
-      setPlaylistsTotal(0);
       return undefined;
     }
 
@@ -73,10 +70,10 @@ export function usePlaylists(accessToken) {
   }, []);
 
   return {
-    playlists,
-    playlistsOffset,
-    playlistsTotal,
-    isPlaylistsLoading,
+    playlists: accessToken ? playlists : [],
+    playlistsOffset: accessToken ? playlistsOffset : 0,
+    playlistsTotal: accessToken ? playlistsTotal : 0,
+    isPlaylistsLoading: accessToken ? isPlaylistsLoading : false,
     playlistsRef,
     loadMorePlaylists,
     scrollPlaylists,

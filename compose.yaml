@@ -1,0 +1,88 @@
+name: raidiantfm
+
+services:
+  db:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: raidiantfm
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-raidiantfm}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in the root .env file}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet
+          --username "$${MONGO_INITDB_ROOT_USERNAME}"
+          --password "$${MONGO_INITDB_ROOT_PASSWORD}"
+          --authenticationDatabase admin
+          --eval "quit(db.adminCommand('ping').ok ? 0 : 2)"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - data
+
+  backend:
+    build:
+      context: .
+      dockerfile: raidiohost-node/Dockerfile
+    restart: unless-stopped
+    init: true
+    env_file:
+      - raidiohost-node/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3050
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-raidiantfm}:${MONGO_ROOT_PASSWORD}@db:27017/raidiohost?authSource=admin
+      CORS_ORIGINS: http://127.0.0.1:${WEB_PORT:-8080}
+      REDIRECT_URL: http://127.0.0.1:${WEB_PORT:-8080}/auth/callback
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3050/').then(() => process.exit(0)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - app
+      - data
+
+  webplayer:
+    build:
+      context: .
+      dockerfile: raidiohost-webplayer/Dockerfile
+      args:
+        VITE_SERVER_BASE_URL: ""
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    ports:
+      - 127.0.0.1:${WEB_PORT:-8080}:80
+    healthcheck:
+      test: [CMD, wget, --quiet, --tries=1, --spider, http://127.0.0.1/]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - app
+
+networks:
+  app:
+  data:
+
+volumes:
+  mongo-data:
