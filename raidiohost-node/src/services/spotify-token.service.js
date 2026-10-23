@@ -129,7 +129,15 @@ function createSpotifyTokenService({
         }
     }
 
-    return { execute, refresh };
+    async function getAccessToken(userId) {
+        const credentials = await usableCredentials(userId);
+        return {
+            accessToken: credentials.accessToken,
+            expiresAt: new Date(credentials.tokenExpiresAt),
+        };
+    }
+
+    return { execute, getAccessToken, refresh };
 }
 
 module.exports = { createSpotifyTokenService, SpotifyAuthError, isInvalidGrant };

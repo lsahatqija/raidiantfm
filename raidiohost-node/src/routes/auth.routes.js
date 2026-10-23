@@ -3,6 +3,7 @@ const spotifyApi = require('../startup/spotify');
 const defaultUserService = require('../services/user.service');
 const defaultOAuthTransactionService = require('../services/oauth-transaction.service');
 const defaultSessionService = require('../services/session.service');
+const { createSpotifyTokenService } = require('../services/spotify-token.service');
 
 const SCOPES = [
     'streaming', 'user-read-private', 'user-read-email', 'user-top-read', 'user-library-read',
@@ -15,6 +16,7 @@ function createAuthRouter({
     createSpotifyClient = () => spotifyApi.createClient(),
     oauthTransactionService = defaultOAuthTransactionService,
     sessionService = defaultSessionService,
+    spotifyTokenService = createSpotifyTokenService(),
     userService = defaultUserService,
     config,
 }) {
@@ -76,6 +78,24 @@ function createAuthRouter({
             spotifyId: session.userId.spotifyId,
             username: session.userId.username,
         } });
+    });
+
+    router.get('/spotify-token', async (request, response, next) => {
+        const session = await sessionService.resolve(request.cookies?.[config.session.cookie.name]);
+        if (!session?.userId) {
+            return response.status(401).json({ error: { code: 'unauthenticated', message: 'Sign in required' } });
+        }
+
+        try {
+            const token = await spotifyTokenService.getAccessToken(session.userId._id.toString());
+            response.set('Cache-Control', 'no-store');
+            return response.json({
+                accessToken: token.accessToken,
+                expiresAt: token.expiresAt.toISOString(),
+            });
+        } catch (error) {
+            return next(error);
+        }
     });
 
     router.post('/logout', async (request, response) => {

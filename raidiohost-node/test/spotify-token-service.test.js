@@ -110,6 +110,20 @@ describe('request-scoped Spotify token service', () => {
         expect(harness.getRefreshCalls()).toBe(1);
     });
 
+    it('returns a refreshed access token and expiry without refresh credentials', async () => {
+        const harness = createHarness();
+        harness.credentials.get('user-a').tokenExpiresAt = new Date(0);
+
+        const token = await harness.service.getAccessToken('user-a');
+
+        expect(token).toEqual({
+            accessToken: 'renewed-refresh-a',
+            expiresAt: expect.any(Date),
+        });
+        expect(token).not.toHaveProperty('refreshToken');
+        expect(harness.getRefreshCalls()).toBe(1);
+    });
+
     it('maps invalid_grant to reauth_required and revokes only that user sessions', async () => {
         const harness = createHarness({ invalidGrant: true });
         harness.credentials.get('user-a').tokenExpiresAt = new Date(0);

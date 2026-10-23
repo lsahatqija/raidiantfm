@@ -1,8 +1,10 @@
 const express = require('express');
 const request = require('supertest');
 const { createAuthRouter } = require('../src/routes/auth.routes');
+const { handleAuthError } = require('../src/middleware/auth.middleware');
 
 function createFixture() {
+    const revokedSessions = new Set();
     const spotifyClient = {
         createAuthorizeURL: vi.fn((_scopes, state) => `https://accounts.spotify.com/authorize?state=${state}`),
         authorizationCodeGrant: vi.fn().mockResolvedValue({
@@ -24,14 +26,29 @@ function createFixture() {
     };
     const sessionService = {
         create: vi.fn().mockResolvedValue('opaque-session-token'),
-        resolve: vi.fn().mockResolvedValue({
-            userId: {
-                _id: 'database-user',
-                spotifyId: 'spotify-user',
-                username: 'Test User',
-            },
+        resolve: vi.fn(async (token) => {
+            if (!token || revokedSessions.has(token)) return null;
+            const userId = token === 'session-a' || token === 'session-b'
+                ? `user-${token.at(-1)}`
+                : 'database-user';
+            return {
+                userId: {
+                    _id: userId,
+                    spotifyId: userId === 'database-user' ? 'spotify-user' : `spotify-${userId}`,
+                    username: 'Test User',
+                },
+            };
         }),
-        revoke: vi.fn().mockResolvedValue(true),
+        revoke: vi.fn(async (token) => {
+            if (token) revokedSessions.add(token);
+            return true;
+        }),
+    };
+    const spotifyTokenService = {
+        getAccessToken: vi.fn(async (userId) => ({
+            accessToken: `access-${userId}`,
+            expiresAt: new Date('2026-10-23T22:00:00.000Z'),
+        })),
     };
     const userService = {
         upsertUser: vi.fn().mockResolvedValue({
@@ -57,15 +74,18 @@ function createFixture() {
         createSpotifyClient: () => spotifyClient,
         oauthTransactionService,
         sessionService,
+        spotifyTokenService,
         userService,
         config,
     }));
+    app.use(handleAuthError);
 
     return {
         app,
         spotifyClient,
         oauthTransactionService,
         sessionService,
+        spotifyTokenService,
         userService,
     };
 }
@@ -158,6 +178,39 @@ describe('secure authentication routes', () => {
         expect(JSON.stringify(response.body)).not.toMatch(/accessToken|refreshToken/i);
     });
 
+    it('requires an application session before issuing an SDK access token', async () => {
+        const fixture = createFixture();
+
+        const response = await request(fixture.app).get('/auth/spotify-token');
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({
+            error: { code: 'unauthenticated', message: 'Sign in required' },
+        });
+        expect(fixture.spotifyTokenService.getAccessToken).not.toHaveBeenCalled();
+    });
+
+    it('issues only each session user SDK access token and expiry', async () => {
+        const fixture = createFixture();
+
+        const [userA, userB] = await Promise.all([
+            request(fixture.app).get('/auth/spotify-token').set('Cookie', 'raidiantfm_session=session-a'),
+            request(fixture.app).get('/auth/spotify-token').set('Cookie', 'raidiantfm_session=session-b'),
+        ]);
+
+        expect(userA.status).toBe(200);
+        expect(userA.headers['cache-control']).toBe('no-store');
+        expect(userA.body).toEqual({
+            accessToken: 'access-user-a',
+            expiresAt: '2026-10-23T22:00:00.000Z',
+        });
+        expect(userB.body).toEqual({
+            accessToken: 'access-user-b',
+            expiresAt: '2026-10-23T22:00:00.000Z',
+        });
+        expect(JSON.stringify([userA.body, userB.body])).not.toMatch(/refresh/i);
+    });
+
     it('revokes only the presented session and clears its cookie', async () => {
         const fixture = createFixture();
 
@@ -168,6 +221,11 @@ describe('secure authentication routes', () => {
         expect(response.status).toBe(204);
         expect(fixture.sessionService.revoke).toHaveBeenCalledWith('session-to-revoke');
         expect(response.headers['set-cookie'][0]).toContain('raidiantfm_session=;');
+
+        const tokenResponse = await request(fixture.app)
+            .get('/auth/spotify-token')
+            .set('Cookie', 'raidiantfm_session=session-to-revoke');
+        expect(tokenResponse.status).toBe(401);
     });
 
     it('does not expose legacy token and refresh endpoints', async () => {
