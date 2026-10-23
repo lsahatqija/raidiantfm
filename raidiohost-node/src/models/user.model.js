@@ -54,18 +54,34 @@ const userSchema = new mongoose.Schema(
             default: '',
         },
 
-        // Spotify tokens
-        accessToken: {
-            type: String,
-            default: '',
-        },
-        refreshToken: {
-            type: String,
-            default: '',
-        },
-        tokenExpiresAt: {
-            type: Date,
-            default: null,
+        // Encrypted Spotify credentials. The complete subdocument is omitted
+        // from JSON so encrypted material and lookup fingerprints stay server-only.
+        spotifyCredentials: {
+            accessToken: {
+                ciphertext: { type: String, required: true },
+                iv: { type: String, required: true },
+                authTag: { type: String, required: true },
+            },
+            refreshToken: {
+                ciphertext: { type: String, required: true },
+                iv: { type: String, required: true },
+                authTag: { type: String, required: true },
+            },
+            refreshTokenHash: {
+                type: String,
+                required: true,
+                select: false,
+                index: true,
+            },
+            expiresAt: {
+                type: Date,
+                required: true,
+            },
+            version: {
+                type: Number,
+                default: 0,
+                min: 0,
+            },
         },
 
         // User's geographic location
@@ -93,7 +109,15 @@ const userSchema = new mongoose.Schema(
         },
 
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: {
+            transform(_document, result) {
+                delete result.spotifyCredentials;
+                return result;
+            },
+        },
+    }
 );
 
 const User = mongoose.model('User', userSchema);

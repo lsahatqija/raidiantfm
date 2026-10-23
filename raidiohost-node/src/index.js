@@ -11,6 +11,7 @@ const app = express();
 };*/
 
 require('./startup/spotify').initialize(runtimeConfig.spotify);
+require('./services/user.service').initializeTokenEncryption(runtimeConfig.tokens.encryptionKey);
 require('./startup/db')(runtimeConfig);
 require('./startup/config')(app, runtimeConfig);
 require('./startup/routes')(app);
