@@ -110,6 +110,33 @@ async function findBySpotifyId(spotifyId) {
     return User.findOne({ spotifyId });
 }
 
+async function findById(userId) {
+    return User.findById(userId);
+}
+
+async function replaceSpotifyCredentials(userId, expectedVersion, tokenData) {
+    const cipher = getTokenCipher();
+    const update = {
+        'spotifyCredentials.accessToken': cipher.encrypt(tokenData.accessToken),
+        'spotifyCredentials.expiresAt': tokenData.tokenExpiresAt,
+    };
+
+    if (tokenData.refreshToken) {
+        update['spotifyCredentials.refreshToken'] = cipher.encrypt(tokenData.refreshToken);
+        update['spotifyCredentials.refreshTokenHash'] = hashRefreshToken(tokenData.refreshToken);
+    }
+
+    return User.findOneAndUpdate(
+        { _id: userId, 'spotifyCredentials.version': expectedVersion },
+        {
+            $set: update,
+            $inc: { 'spotifyCredentials.version': 1 },
+            $unset: { accessToken: 1, refreshToken: 1, tokenExpiresAt: 1 },
+        },
+        { new: true, runValidators: true },
+    );
+}
+
 /**
  * Update the mutable display username for a user.
  * @param {string} spotifyId
@@ -135,6 +162,14 @@ async function updateProfile(spotifyId, profileUpdates) {
         { spotifyId },
         { $set: profileUpdates },
         { new: true, runValidators: true }
+    );
+}
+
+async function updateProfileById(userId, profileUpdates) {
+    return User.findByIdAndUpdate(
+        userId,
+        { $set: profileUpdates },
+        { new: true, runValidators: true },
     );
 }
 
@@ -194,15 +229,33 @@ async function updateLocation(spotifyId, locationData) {
     );
 }
 
+async function updateLocationById(userId, locationData) {
+    return User.findByIdAndUpdate(
+        userId,
+        {
+            $set: {
+                'location.city': locationData.city,
+                'location.latitude': locationData.latitude,
+                'location.longitude': locationData.longitude,
+            },
+        },
+        { new: true, runValidators: true },
+    );
+}
+
 module.exports = {
     initializeTokenEncryption,
     encryptSpotifyCredentials,
     decryptSpotifyCredentials,
     upsertUser,
     findBySpotifyId,
+    findById,
+    replaceSpotifyCredentials,
     updateUsername,
     updateProfile,
+    updateProfileById,
     updateAccessToken,
     findByRefreshToken,
     updateLocation,
+    updateLocationById,
 };

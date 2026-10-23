@@ -29,4 +29,12 @@ async function revoke(token) {
     return result.modifiedCount === 1;
 }
 
-module.exports = { initialize, create, resolve, revoke };
+async function revokeAllForUser(userId) {
+    const result = await Session.updateMany(
+        { userId, revokedAt: null },
+        { $set: { revokedAt: new Date() } },
+    );
+    return result.modifiedCount;
+}
+
+module.exports = { initialize, create, resolve, revoke, revokeAllForUser };

@@ -1,17 +1,14 @@
 const SpotifyWebApi = require('spotify-web-api-node');
 
-const spotifyApi = new SpotifyWebApi();
+let spotifyConfig;
 
-spotifyApi.initialize = function initialize(spotifyConfig) {
-    this.spotifyConfig = spotifyConfig;
-    spotifyApi.setClientId(spotifyConfig.clientId);
-    spotifyApi.setClientSecret(spotifyConfig.clientSecret);
-    spotifyApi.setRedirectURI(spotifyConfig.redirectUri);
-};
+function initialize(config) {
+    spotifyConfig = { ...config };
+}
 
-spotifyApi.createClient = function createClient() {
-    if (!this.spotifyConfig) throw new Error('Spotify client has not been initialized');
-    return new SpotifyWebApi(this.spotifyConfig);
-};
+function createClient() {
+    if (!spotifyConfig) throw new Error('Spotify client factory has not been initialized');
+    return new SpotifyWebApi(spotifyConfig);
+}
 
-module.exports = spotifyApi;
+module.exports = { initialize, createClient };

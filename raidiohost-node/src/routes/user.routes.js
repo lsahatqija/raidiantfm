@@ -1,14 +1,17 @@
 const express = require('express');
-const router = express.Router();
 const userController = require('../controllers/user.controller');
 
 // GET  /api/users/me  — fetch current user profile
-router.get('/me', userController.getMe);
+function createUserRouter() {
+    const router = express.Router();
+    router.get('/me', userController.getMe);
 
 // PATCH /api/users/me  — update display username
-router.patch('/me', userController.updateMe);
+    router.patch('/me', userController.updateMe);
 
 // PATCH /api/users/me/location  — update user's geographic location
-router.patch('/me/location', userController.updateLocation);
+    router.patch('/me/location', userController.updateLocation);
+    return router;
+}
 
-module.exports = router;
+module.exports = { createUserRouter };

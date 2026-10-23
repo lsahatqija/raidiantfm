@@ -1,21 +1,13 @@
-const spotifyApi = require('../startup/spotify');
 const userService = require('../services/user.service');
 
 /**
  * GET /api/users/me
  * Returns the current user's document from the database.
- * Requires Authorization: Bearer <spotifyAccessToken> header.
+ * Requires an application session.
  */
 async function getMe(req, res) {
     try {
-        const meData = await spotifyApi.getMe();
-        const spotifyId = meData.body?.id;
-
-        if (!spotifyId) {
-            return res.status(401).json({ error: 'Unable to identify Spotify user' });
-        }
-
-        const user = await userService.findBySpotifyId(spotifyId);
+        const user = await userService.findById(req.auth.userId);
 
         if (!user) {
             return res.status(404).json({ error: 'User not found. Log in via Spotify to create your profile.' });
@@ -42,7 +34,7 @@ async function getMe(req, res) {
  * PATCH /api/users/me
  * Updates the mutable display username for the current user.
  * Body: { username: string }
- * Requires Authorization: Bearer <spotifyAccessToken> header.
+ * Requires an application session.
  */
 async function updateMe(req, res) {
     const { username, lastVolume } = req.body || {};
@@ -73,14 +65,7 @@ async function updateMe(req, res) {
     }
 
     try {
-        const meData = await spotifyApi.getMe();
-        const spotifyId = meData.body?.id;
-
-        if (!spotifyId) {
-            return res.status(401).json({ error: 'Unable to identify Spotify user' });
-        }
-
-        const updated = await userService.updateProfile(spotifyId, updates);
+        const updated = await userService.updateProfileById(req.auth.userId, updates);
 
         if (!updated) {
             return res.status(404).json({ error: 'User not found. Log in via Spotify to create your profile.' });
@@ -105,7 +90,7 @@ async function updateMe(req, res) {
  * PATCH /api/users/me/location
  * Updates the user's geographic location.
  * Body: { city: string, latitude: number, longitude: number }
- * Requires Authorization: Bearer <spotifyAccessToken> header.
+ * Requires an application session.
  */
 async function updateLocation(req, res) {
     const { city, latitude, longitude } = req.body || {};
@@ -121,14 +106,7 @@ async function updateLocation(req, res) {
     }
 
     try {
-        const meData = await spotifyApi.getMe();
-        const spotifyId = meData.body?.id;
-
-        if (!spotifyId) {
-            return res.status(401).json({ error: 'Unable to identify Spotify user' });
-        }
-
-        const updated = await userService.updateLocation(spotifyId, {
+        const updated = await userService.updateLocationById(req.auth.userId, {
             city: city.trim(),
             latitude,
             longitude,

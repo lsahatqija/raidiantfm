@@ -1,9 +1,14 @@
-const spotifyApi = require('../startup/spotify');
 const {
     mapTrack,
     pickRandomTracks,
     findSimilarTrack,
 } = require('./api.functions');
+
+function respondToSpotifyAuthFailure(res, error) {
+    if (!['reauth_required', 'spotify_refresh_unavailable'].includes(error?.code)) return false;
+    res.status(error.statusCode || 401).json({ error: { code: error.code, message: error.message } });
+    return true;
+}
 
 async function search(req, res) {
     const q = `${req.query.q || ''}`.trim();
@@ -13,11 +18,12 @@ async function search(req, res) {
     }
 
     try {
-        const data = await spotifyApi.searchTracks(q, { limit: 10 });
+        const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit: 10 }));
         const tracks = data.body.tracks.items.map(mapTrack);
         console.log('Found tracks:', tracks);
         return res.json({ tracks });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error searching tracks:', error);
         return res.status(500).json({ error: 'Error searching tracks', tracks: [] });
     }
@@ -25,13 +31,14 @@ async function search(req, res) {
 
 async function suggestions(req, res) {
     try {
-        const data = await spotifyApi.getMyTopTracks({ limit: 50 });
+        const data = await req.spotify.execute((spotifyApi) => spotifyApi.getMyTopTracks({ limit: 50 }));
         const topTracks = Array.isArray(data.body?.items) ? data.body.items : [];
         const tracks = pickRandomTracks(topTracks, 5).map(mapTrack);
 
         console.log('Suggested tracks:', tracks);
         return res.json({ tracks });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error fetching suggestions:', error);
         const statusCode = error?.statusCode === 401 ? 401 : 500;
         return res.status(statusCode).json({ error: 'Error fetching suggestions', tracks: [] });
@@ -47,7 +54,9 @@ async function queueNext(req, res) {
     }
 
     try {
-        const { queuedTrack, matchedGenre, strategy } = await findSimilarTrack(trackInput, recentTracks);
+        const { queuedTrack, matchedGenre, strategy } = await req.spotify.execute(
+            (spotifyApi) => findSimilarTrack(spotifyApi, trackInput, recentTracks),
+        );
 
         if (!queuedTrack) {
             return res.json({
@@ -62,6 +71,7 @@ async function queueNext(req, res) {
         console.log('Queued next track:', mappedTrack, 'strategy:', strategy);
         return res.json({ track: mappedTrack, genre: matchedGenre, strategy });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error queueing next track:', error);
         return res.json({
             track: null,
@@ -76,10 +86,10 @@ async function playlists(req, res) {
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
     try {
-        const data = await spotifyApi.getUserPlaylists({ limit, offset });
-        const playlistItems = Array.isArray(data.body?.items) ? data.body.items : [];
-
-        const playlistsResult = await Promise.all(playlistItems.map(async (pl) => {
+        const { data, playlistsResult } = await req.spotify.execute(async (spotifyApi) => {
+            const result = await spotifyApi.getUserPlaylists({ limit, offset });
+            const playlistItems = Array.isArray(result.body?.items) ? result.body.items : [];
+            const mapped = await Promise.all(playlistItems.map(async (pl) => {
             let trackCount = Number(pl?.items?.total ?? 0);
 
             // Some playlist payloads can report an empty/partial tracks object.
@@ -104,10 +114,13 @@ async function playlists(req, res) {
                 ownerId: pl.owner?.id || null,
                 collaborative: pl.collaborative ?? false,
             };
-        }));
+            }));
+            return { data: result, playlistsResult: mapped };
+        });
 
         return res.json({ playlists: playlistsResult, total: data.body?.total ?? 0, limit, offset });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error fetching playlists:', error);
         const statusCode = error?.statusCode === 401 ? 401 : error?.statusCode === 403 ? 403 : 500;
         return res.status(statusCode).json({ error: 'Error fetching playlists', playlists: [] });
@@ -124,7 +137,7 @@ async function playlistTracks(req, res) {
     }
 
     try {
-        const data = await spotifyApi.getPlaylist(id, { limit, offset });
+        const data = await req.spotify.execute((spotifyApi) => spotifyApi.getPlaylist(id, { limit, offset }));
         const items = data.body?.items?.items ?? [];
         const total = data.body?.items?.total ?? 0;
 
@@ -136,10 +149,11 @@ async function playlistTracks(req, res) {
 
         return res.json({ tracks, total, limit, offset });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error fetching playlist tracks:', error);
         const statusCode = error?.statusCode === 401 ? 401 : error?.statusCode === 403 ? 403 : 500;
         const errorMessage = statusCode === 403
-            ? 'Forbidden from Spotify API. Ensure a valid Authorization: Bearer <token> is sent.'
+            ? 'Spotify denied access to this playlist.'
             : 'Error fetching playlist tracks';
         return res.status(statusCode).json({ error: errorMessage, tracks: [] });
     }
@@ -154,10 +168,11 @@ async function play(req, res) {
     }
 
     try {
-        await spotifyApi.play(playOptions);
+        await req.spotify.execute((spotifyApi) => spotifyApi.play(playOptions));
         console.log('Playing track:', uri);
         return res.json({ ok: true, message: 'Track playing!' });
     } catch (error) {
+        if (respondToSpotifyAuthFailure(res, error)) return;
         console.error('Error playing track:', error);
         return res.status(500).json({ ok: false, error: 'Error playing track' });
     }

@@ -1,5 +1,3 @@
-const spotifyApi = require('../startup/spotify');
-
 function mapTrack(track) {
     const artistNames = Array.isArray(track?.artists)
         ? track.artists.map((artist) => (typeof artist === 'string' ? artist : artist?.name)).filter(Boolean)
@@ -132,7 +130,7 @@ function filterPlayableTracks(candidates = [], recentTrackIds = new Set()) {
     return candidates.filter((track) => !isTrackRecentlyPlayed(track, recentTrackIds));
 }
 
-async function searchTracksSafely(query, limit = 25) {
+async function searchTracksSafely(spotifyApi, query, limit = 25) {
     try {
         const response = await spotifyApi.searchTracks(query, { limit });
         return Array.isArray(response.body?.tracks?.items) ? response.body.tracks.items : [];
@@ -142,7 +140,7 @@ async function searchTracksSafely(query, limit = 25) {
     }
 }
 
-async function getUserTopTrackPool(limit = 100) {
+async function getUserTopTrackPool(spotifyApi, limit = 100) {
     const results = await Promise.allSettled([
         spotifyApi.getMyTopTracks({ limit: 50, offset: 0 }),
         spotifyApi.getMyTopTracks({ limit: 50, offset: 50 }),
@@ -159,7 +157,7 @@ async function getUserTopTrackPool(limit = 100) {
     return tracks.slice(0, limit);
 }
 
-async function findSimilarTrack(sourceTrackInput = {}, recentTracks = []) {
+async function findSimilarTrack(spotifyApi, sourceTrackInput = {}, recentTracks = []) {
     const sourceTrackId = extractTrackId(sourceTrackInput);
     const recentTrackIds = buildRecentTrackIdSet(recentTracks);
     const recentArtistKeys = new Set(recentTracks.map((track) => getPrimaryArtistKey(track)).filter(Boolean));
@@ -212,7 +210,7 @@ async function findSimilarTrack(sourceTrackInput = {}, recentTracks = []) {
     }
 
     if (matchedGenre) {
-        addUniqueTracks(candidates, await searchTracksSafely(`genre:"${matchedGenre}"`, 25));
+        addUniqueTracks(candidates, await searchTracksSafely(spotifyApi, `genre:"${matchedGenre}"`, 25));
     }
 
     const filteredCandidates = filterPlayableTracks(candidates, recentTrackIds);
@@ -230,7 +228,7 @@ async function findSimilarTrack(sourceTrackInput = {}, recentTracks = []) {
     }
 
     if (primaryArtistName) {
-        const sameArtistTracks = await searchTracksSafely(`artist:"${primaryArtistName}"`, 30);
+        const sameArtistTracks = await searchTracksSafely(spotifyApi, `artist:"${primaryArtistName}"`, 30);
         const sameArtistCandidates = filterPlayableTracks(sameArtistTracks, recentTrackIds).filter((track) => {
             const artistKey = getPrimaryArtistKey(track);
             return artistKey && artistKey === sourceArtistKey;
@@ -241,7 +239,7 @@ async function findSimilarTrack(sourceTrackInput = {}, recentTracks = []) {
         }
     }
 
-    const topTrackCandidates = filterPlayableTracks(await getUserTopTrackPool(100), recentTrackIds);
+    const topTrackCandidates = filterPlayableTracks(await getUserTopTrackPool(spotifyApi, 100), recentTrackIds);
 
     if (topTrackCandidates.length) {
         return { queuedTrack: pickRandomArtistTrack(topTrackCandidates), matchedGenre, strategy: 'top-tracks-fallback' };
