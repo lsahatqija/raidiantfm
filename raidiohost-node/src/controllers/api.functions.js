@@ -134,8 +134,8 @@ async function searchTracksSafely(spotifyApi, query, limit = 25) {
     try {
         const response = await spotifyApi.searchTracks(query, { limit });
         return Array.isArray(response.body?.tracks?.items) ? response.body.tracks.items : [];
-    } catch (error) {
-        console.warn(`Spotify search failed for query: ${query}`, error?.message || error);
+    } catch {
+        console.warn('Spotify queue search lookup failed');
         return [];
     }
 }
@@ -170,8 +170,8 @@ async function findSimilarTrack(spotifyApi, sourceTrackInput = {}, recentTracks 
         try {
             const sourceTrackResponse = await spotifyApi.getTrack(sourceTrackId);
             sourceTrack = sourceTrackResponse.body || sourceTrackInput;
-        } catch (error) {
-            console.warn('Unable to load source track details:', error?.message || error);
+        } catch {
+            console.warn('Spotify source track lookup failed');
         }
     }
 
@@ -184,8 +184,8 @@ async function findSimilarTrack(spotifyApi, sourceTrackInput = {}, recentTracks 
             const artistResponse = await spotifyApi.getArtist(primaryArtist.id);
             const artistGenres = Array.isArray(artistResponse.body?.genres) ? artistResponse.body.genres : [];
             matchedGenre = artistGenres[0] || null;
-        } catch (error) {
-            console.warn('Unable to load artist metadata:', error?.message || error);
+        } catch {
+            console.warn('Spotify artist lookup failed');
         }
     }
 
@@ -204,8 +204,8 @@ async function findSimilarTrack(spotifyApi, sourceTrackInput = {}, recentTracks 
                 seed_tracks: [sourceTrack.id],
             });
             addUniqueTracks(candidates, Array.isArray(recommendations.body?.tracks) ? recommendations.body.tracks : []);
-        } catch (error) {
-            console.warn('Spotify recommendations lookup failed:', error?.message || error);
+        } catch {
+            console.warn('Spotify recommendations lookup failed');
         }
     }
 

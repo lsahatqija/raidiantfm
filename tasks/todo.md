@@ -152,14 +152,20 @@ passes with 38 backend tests and 2 frontend tests.
 
 ## Phase 2: Product-flow migration
 
+**Status (2026-10-23):** Task 9 is complete. All Spotify-backed API routes use
+the authenticated request-scoped client, concurrent route coverage now spans
+search, suggestions, queue, playlists, playlist items, and playback, and
+Spotify failures return stable redacted error codes. Current playlist endpoint
+and quota-mode migrations remain explicitly scoped to Task 13.
+
 ### Task 9: Migrate Spotify API helpers to scoped clients
 
 **Description:** Pass a request/user-scoped Spotify client through search, recommendation, playlist, queue, and playback paths.
 
 **Acceptance criteria:**
-- [ ] No application code imports a mutable Spotify singleton.
-- [ ] Every Spotify operation identifies its session/user explicitly.
-- [ ] Spotify errors map to stable API error codes without token leakage.
+- [x] No application code imports a mutable Spotify singleton.
+- [x] Every Spotify operation identifies its session/user explicitly.
+- [x] Spotify errors map to stable API error codes without token leakage.
 
 **Verification:** Parallel-user contract tests cover every Spotify-backed endpoint.
 
