@@ -70,14 +70,22 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 
 ## Phase 1: Identity and session foundation
 
+**Status (2026-10-23):** Tasks 4-6 are implemented on
+`feature/phase-1-session-foundation` through commit `b4fc802`. The disposable
+local `raidiohost` database was reset to remove the legacy plaintext-token user
+record; system topics will be recreated by the existing startup seeder. The
+workspace lint, test, and production-build gate passes with 27 passing backend
+tests, 2 passing frontend tests, and the original cross-user regression still
+recorded as the single expected failure. Task 7 is next.
+
 ### Task 4: Validate runtime configuration and secrets
 
 **Description:** Replace ad hoc environment reads with fail-fast validation and separate keys for session hashing/signing and token encryption.
 
 **Acceptance criteria:**
-- [ ] Missing/malformed config produces a clear startup error with no secret values.
-- [ ] origin, proxy, cookie, redirect, and encryption settings are environment-specific.
-- [ ] production refuses insecure cookie/redirect settings.
+- [x] Missing/malformed config produces a clear startup error with no secret values.
+- [x] origin, proxy, cookie, redirect, and encryption settings are environment-specific.
+- [x] production refuses insecure cookie/redirect settings.
 
 **Verification:** Unit tests cover valid, missing, and unsafe production configurations.
 
@@ -88,9 +96,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Add storage primitives for encrypted Spotify token material, opaque hashed sessions, OAuth state transactions, expiry, and refresh coordination.
 
 **Acceptance criteria:**
-- [ ] Raw tokens never appear in MongoDB fields or model serialization.
-- [ ] Sessions have user, hash, created/last-seen/absolute expiry, and revocation fields.
-- [ ] OAuth transactions and refresh leases expire automatically via TTL/index strategy.
+- [x] Raw tokens never appear in MongoDB fields or model serialization.
+- [x] Sessions have user, hash, created/last-seen/absolute expiry, and revocation fields.
+- [x] OAuth transactions and refresh leases expire automatically via TTL/index strategy.
 
 **Verification:** Model/encryption round-trip, wrong-key, expiry, serialization, and index tests pass.
 
@@ -101,9 +109,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Replace token-returning callback behavior with state-validated OAuth, an httpOnly session cookie, session introspection, logout, and top-level redirect completion.
 
 **Acceptance criteria:**
-- [ ] State mismatch/replay/expiry is rejected and codes/tokens are never logged or rendered.
-- [ ] Login creates the correct user/session; logout revokes only that session and clears its cookie.
-- [ ] `/auth/token` and `/auth/tokens` are removed; the callback never sends secrets through `postMessage`.
+- [x] State mismatch/replay/expiry is rejected and codes/tokens are never logged or rendered.
+- [x] Login creates the correct user/session; logout revokes only that session and clears its cookie.
+- [x] `/auth/token` and `/auth/tokens` are removed; the callback never sends secrets through `postMessage`.
 
 **Verification:** Auth integration tests cover success, denial, state attacks, fixation, logout, cookie flags, and error sanitization.
 
