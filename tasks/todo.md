@@ -70,13 +70,14 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 
 ## Phase 1: Identity and session foundation
 
-**Status (2026-10-23):** Tasks 4-6 are implemented on
-`feature/phase-1-session-foundation` through commit `b4fc802`. The disposable
-local `raidiohost` database was reset to remove the legacy plaintext-token user
-record; system topics will be recreated by the existing startup seeder. The
-workspace lint, test, and production-build gate passes with 27 passing backend
-tests, 2 passing frontend tests, and the original cross-user regression still
-recorded as the single expected failure. Task 7 is next.
+**Status (2026-10-23):** Phase 1 is complete on
+`feature/phase-1-session-foundation`. The disposable local `raidiohost` database
+was reset to remove the legacy plaintext-token user record; system topics will
+be recreated by the existing startup seeder. Spotify clients and token refresh
+are now request/user scoped, every private route resolves an opaque application
+session, private topic ownership is enforced, and the original cross-user
+regression now passes. The workspace lint, test, and production-build gate
+passes with 38 backend tests and 2 frontend tests.
 
 ### Task 4: Validate runtime configuration and secrets
 
@@ -122,9 +123,9 @@ recorded as the single expected failure. Task 7 is next.
 **Description:** Replace the exported mutable client and timer refresh loop with per-user clients and just-in-time server refresh.
 
 **Acceptance criteria:**
-- [ ] No module-global user token or refresh timer exists.
-- [ ] Concurrent refreshes preserve the current access and replacement refresh tokens atomically.
-- [ ] `invalid_grant` returns `reauth_required` and revokes affected sessions without affecting other users.
+- [x] No module-global user token or refresh timer exists.
+- [x] Concurrent refreshes preserve the current access and replacement refresh tokens atomically.
+- [x] `invalid_grant` returns `reauth_required` and revokes affected sessions without affecting other users.
 
 **Verification:** Unit/integration tests cover parallel users, parallel refresh, process restart, rotation, Spotify 401 retry-once, and invalid grant.
 
@@ -135,9 +136,9 @@ recorded as the single expected failure. Task 7 is next.
 **Description:** Resolve a session once per request and require it on all private Spotify, user, radio, geocoding, and playback routes.
 
 **Acceptance criteria:**
-- [ ] Unauthenticated requests consistently return 401; forbidden ownership returns 403.
-- [ ] Controllers use `req.auth.userId` and do not rediscover the user through mutable Spotify state.
-- [ ] Private topics cannot be viewed/subscribed/modified by another user.
+- [x] Unauthenticated requests consistently return 401; forbidden ownership returns 403.
+- [x] Controllers use `req.auth.userId` and do not rediscover the user through mutable Spotify state.
+- [x] Private topics cannot be viewed/subscribed/modified by another user.
 
 **Verification:** Route matrix tests cover missing/expired/revoked sessions and cross-owner IDs.
 
@@ -145,9 +146,9 @@ recorded as the single expected failure. Task 7 is next.
 
 ## Checkpoint B
 
-- [ ] Two server-side sessions remain independent under interleaved and concurrent requests.
-- [ ] No refresh token reaches the browser, logs, HTML, or API responses.
-- [ ] The original cross-user regression test passes.
+- [x] Two server-side sessions remain independent under interleaved and concurrent requests.
+- [x] No refresh token reaches the browser, logs, HTML, or API responses.
+- [x] The original cross-user regression test passes.
 
 ## Phase 2: Product-flow migration
 
