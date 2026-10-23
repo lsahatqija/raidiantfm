@@ -1,29 +1,12 @@
-const spotifyApi = require('../startup/spotify');
 const userService = require('../services/user.service');
 const Topic = require('../models/topic.model');
 const radioHostService = require('../services/radioHost.service');
 
 /**
- * Resolve the current authenticated user from the Spotify Bearer token.
- * Returns the Mongoose user doc, or sends a 401/404 response and returns null.
+ * Resolve the current authenticated user from the application session.
  */
 async function resolveUser(req, res) {
-    let meData;
-    try {
-        meData = await spotifyApi.getMe();
-    } catch (err) {
-        const statusCode = err?.statusCode === 401 ? 401 : 500;
-        res.status(statusCode).json({ error: 'Unable to identify Spotify user' });
-        return null;
-    }
-
-    const spotifyId = meData.body?.id;
-    if (!spotifyId) {
-        res.status(401).json({ error: 'Unable to identify Spotify user' });
-        return null;
-    }
-
-    const user = await userService.findBySpotifyId(spotifyId);
+    const user = await userService.findById(req.auth.userId);
     if (!user) {
         res.status(404).json({ error: 'User not found. Log in via Spotify to create your profile.' });
         return null;
@@ -131,8 +114,12 @@ async function getMyTopics(req, res) {
         if (!user) return;
 
         await user.populate('topics.topicId');
+        const visibleTopics = user.topics.filter(({ topicId }) => (
+            topicId
+            && (topicId.isPublic || topicId.createdBy?.toString() === req.auth.userId)
+        ));
 
-        return res.json({ topics: user.topics });
+        return res.json({ topics: visibleTopics });
     } catch (err) {
         console.error('Error in getMyTopics:', err);
         return res.status(500).json({ error: 'Error fetching user topics' });
@@ -154,6 +141,9 @@ async function subscribeTopic(req, res) {
         const topic = await Topic.findById(topicId);
         if (!topic) {
             return res.status(404).json({ error: 'Topic not found' });
+        }
+        if (!topic.isPublic && topic.createdBy?.toString() !== req.auth.userId) {
+            return res.status(403).json({ error: { code: 'forbidden', message: 'This topic belongs to another user' } });
         }
 
         const existing = user.topics.find(

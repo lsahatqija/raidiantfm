@@ -1,5 +1,46 @@
+const crypto = require('node:crypto');
 const User = require('../models/user.model');
 const Topic = require('../models/topic.model');
+const { createTokenCipher } = require('./token-crypto.service');
+
+let tokenCipher;
+
+function initializeTokenEncryption(key) {
+    tokenCipher = createTokenCipher(key);
+}
+
+function getTokenCipher() {
+    if (!tokenCipher) {
+        throw new Error('Token encryption has not been initialized');
+    }
+    return tokenCipher;
+}
+
+function hashRefreshToken(refreshToken) {
+    return crypto.createHash('sha256').update(refreshToken).digest('base64url');
+}
+
+function encryptSpotifyCredentials({ accessToken, refreshToken, tokenExpiresAt }) {
+    const cipher = getTokenCipher();
+    return {
+        accessToken: cipher.encrypt(accessToken),
+        refreshToken: cipher.encrypt(refreshToken),
+        refreshTokenHash: hashRefreshToken(refreshToken),
+        expiresAt: tokenExpiresAt,
+        version: 0,
+    };
+}
+
+function decryptSpotifyCredentials(user) {
+    const cipher = getTokenCipher();
+    const credentials = user.spotifyCredentials;
+    return {
+        accessToken: cipher.decrypt(credentials.accessToken),
+        refreshToken: cipher.decrypt(credentials.refreshToken),
+        tokenExpiresAt: credentials.expiresAt,
+        version: credentials.version ?? 0,
+    };
+}
 
 /**
  * Create or update the user document for a Spotify account.
@@ -16,13 +57,11 @@ const Topic = require('../models/topic.model');
 async function upsertUser(spotifyProfile, tokens) {
     const { id: spotifyId, display_name: spotifyDisplayName = '', email: spotifyEmail = '' } = spotifyProfile;
 
-    // Always sync read-only Spotify fields and token data.
+    // Always sync read-only Spotify fields and encrypted token data.
     const alwaysSet = {
         spotifyDisplayName,
         spotifyEmail,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        tokenExpiresAt: tokens.tokenExpiresAt,
+        spotifyCredentials: encryptSpotifyCredentials(tokens),
     };
 
     // Only set username when the document does not yet exist (i.e. first login).
@@ -35,6 +74,11 @@ async function upsertUser(spotifyProfile, tokens) {
         {
             $set: alwaysSet,
             $setOnInsert: setOnInsert,
+            $unset: {
+                accessToken: 1,
+                refreshToken: 1,
+                tokenExpiresAt: 1,
+            },
         },
         { upsert: true, new: true, runValidators: true }
     );
@@ -66,6 +110,33 @@ async function findBySpotifyId(spotifyId) {
     return User.findOne({ spotifyId });
 }
 
+async function findById(userId) {
+    return User.findById(userId);
+}
+
+async function replaceSpotifyCredentials(userId, expectedVersion, tokenData) {
+    const cipher = getTokenCipher();
+    const update = {
+        'spotifyCredentials.accessToken': cipher.encrypt(tokenData.accessToken),
+        'spotifyCredentials.expiresAt': tokenData.tokenExpiresAt,
+    };
+
+    if (tokenData.refreshToken) {
+        update['spotifyCredentials.refreshToken'] = cipher.encrypt(tokenData.refreshToken);
+        update['spotifyCredentials.refreshTokenHash'] = hashRefreshToken(tokenData.refreshToken);
+    }
+
+    return User.findOneAndUpdate(
+        { _id: userId, 'spotifyCredentials.version': expectedVersion },
+        {
+            $set: update,
+            $inc: { 'spotifyCredentials.version': 1 },
+            $unset: { accessToken: 1, refreshToken: 1, tokenExpiresAt: 1 },
+        },
+        { new: true, runValidators: true },
+    );
+}
+
 /**
  * Update the mutable display username for a user.
  * @param {string} spotifyId
@@ -94,13 +165,23 @@ async function updateProfile(spotifyId, profileUpdates) {
     );
 }
 
+async function updateProfileById(userId, profileUpdates) {
+    return User.findByIdAndUpdate(
+        userId,
+        { $set: profileUpdates },
+        { new: true, runValidators: true },
+    );
+}
+
 /**
  * Find a user by their Spotify refresh token.
  * @param {string} refreshToken
  * @returns {Promise<import('../models/user.model') | null>}
  */
 async function findByRefreshToken(refreshToken) {
-    return User.findOne({ refreshToken });
+    return User.findOne({
+        'spotifyCredentials.refreshTokenHash': hashRefreshToken(refreshToken),
+    });
 }
 
 /**
@@ -110,12 +191,19 @@ async function findByRefreshToken(refreshToken) {
  * @param {{ accessToken: string, tokenExpiresAt: Date }} tokenData
  */
 async function updateAccessToken(spotifyId, tokenData) {
+    const encryptedAccessToken = getTokenCipher().encrypt(tokenData.accessToken);
     await User.findOneAndUpdate(
         { spotifyId },
         {
             $set: {
-                accessToken: tokenData.accessToken,
-                tokenExpiresAt: tokenData.tokenExpiresAt,
+                'spotifyCredentials.accessToken': encryptedAccessToken,
+                'spotifyCredentials.expiresAt': tokenData.tokenExpiresAt,
+            },
+            $inc: { 'spotifyCredentials.version': 1 },
+            $unset: {
+                accessToken: 1,
+                refreshToken: 1,
+                tokenExpiresAt: 1,
             },
         }
     );
@@ -141,12 +229,33 @@ async function updateLocation(spotifyId, locationData) {
     );
 }
 
+async function updateLocationById(userId, locationData) {
+    return User.findByIdAndUpdate(
+        userId,
+        {
+            $set: {
+                'location.city': locationData.city,
+                'location.latitude': locationData.latitude,
+                'location.longitude': locationData.longitude,
+            },
+        },
+        { new: true, runValidators: true },
+    );
+}
+
 module.exports = {
+    initializeTokenEncryption,
+    encryptSpotifyCredentials,
+    decryptSpotifyCredentials,
     upsertUser,
     findBySpotifyId,
+    findById,
+    replaceSpotifyCredentials,
     updateUsername,
     updateProfile,
+    updateProfileById,
     updateAccessToken,
     findByRefreshToken,
     updateLocation,
+    updateLocationById,
 };

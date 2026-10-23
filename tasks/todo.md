@@ -70,14 +70,23 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 
 ## Phase 1: Identity and session foundation
 
+**Status (2026-10-23):** Phase 1 is complete on
+`feature/phase-1-session-foundation`. The disposable local `raidiohost` database
+was reset to remove the legacy plaintext-token user record; system topics will
+be recreated by the existing startup seeder. Spotify clients and token refresh
+are now request/user scoped, every private route resolves an opaque application
+session, private topic ownership is enforced, and the original cross-user
+regression now passes. The workspace lint, test, and production-build gate
+passes with 38 backend tests and 2 frontend tests.
+
 ### Task 4: Validate runtime configuration and secrets
 
 **Description:** Replace ad hoc environment reads with fail-fast validation and separate keys for session hashing/signing and token encryption.
 
 **Acceptance criteria:**
-- [ ] Missing/malformed config produces a clear startup error with no secret values.
-- [ ] origin, proxy, cookie, redirect, and encryption settings are environment-specific.
-- [ ] production refuses insecure cookie/redirect settings.
+- [x] Missing/malformed config produces a clear startup error with no secret values.
+- [x] origin, proxy, cookie, redirect, and encryption settings are environment-specific.
+- [x] production refuses insecure cookie/redirect settings.
 
 **Verification:** Unit tests cover valid, missing, and unsafe production configurations.
 
@@ -88,9 +97,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Add storage primitives for encrypted Spotify token material, opaque hashed sessions, OAuth state transactions, expiry, and refresh coordination.
 
 **Acceptance criteria:**
-- [ ] Raw tokens never appear in MongoDB fields or model serialization.
-- [ ] Sessions have user, hash, created/last-seen/absolute expiry, and revocation fields.
-- [ ] OAuth transactions and refresh leases expire automatically via TTL/index strategy.
+- [x] Raw tokens never appear in MongoDB fields or model serialization.
+- [x] Sessions have user, hash, created/last-seen/absolute expiry, and revocation fields.
+- [x] OAuth transactions and refresh leases expire automatically via TTL/index strategy.
 
 **Verification:** Model/encryption round-trip, wrong-key, expiry, serialization, and index tests pass.
 
@@ -101,9 +110,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Replace token-returning callback behavior with state-validated OAuth, an httpOnly session cookie, session introspection, logout, and top-level redirect completion.
 
 **Acceptance criteria:**
-- [ ] State mismatch/replay/expiry is rejected and codes/tokens are never logged or rendered.
-- [ ] Login creates the correct user/session; logout revokes only that session and clears its cookie.
-- [ ] `/auth/token` and `/auth/tokens` are removed; the callback never sends secrets through `postMessage`.
+- [x] State mismatch/replay/expiry is rejected and codes/tokens are never logged or rendered.
+- [x] Login creates the correct user/session; logout revokes only that session and clears its cookie.
+- [x] `/auth/token` and `/auth/tokens` are removed; the callback never sends secrets through `postMessage`.
 
 **Verification:** Auth integration tests cover success, denial, state attacks, fixation, logout, cookie flags, and error sanitization.
 
@@ -114,9 +123,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Replace the exported mutable client and timer refresh loop with per-user clients and just-in-time server refresh.
 
 **Acceptance criteria:**
-- [ ] No module-global user token or refresh timer exists.
-- [ ] Concurrent refreshes preserve the current access and replacement refresh tokens atomically.
-- [ ] `invalid_grant` returns `reauth_required` and revokes affected sessions without affecting other users.
+- [x] No module-global user token or refresh timer exists.
+- [x] Concurrent refreshes preserve the current access and replacement refresh tokens atomically.
+- [x] `invalid_grant` returns `reauth_required` and revokes affected sessions without affecting other users.
 
 **Verification:** Unit/integration tests cover parallel users, parallel refresh, process restart, rotation, Spotify 401 retry-once, and invalid grant.
 
@@ -127,9 +136,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 **Description:** Resolve a session once per request and require it on all private Spotify, user, radio, geocoding, and playback routes.
 
 **Acceptance criteria:**
-- [ ] Unauthenticated requests consistently return 401; forbidden ownership returns 403.
-- [ ] Controllers use `req.auth.userId` and do not rediscover the user through mutable Spotify state.
-- [ ] Private topics cannot be viewed/subscribed/modified by another user.
+- [x] Unauthenticated requests consistently return 401; forbidden ownership returns 403.
+- [x] Controllers use `req.auth.userId` and do not rediscover the user through mutable Spotify state.
+- [x] Private topics cannot be viewed/subscribed/modified by another user.
 
 **Verification:** Route matrix tests cover missing/expired/revoked sessions and cross-owner IDs.
 
@@ -137,9 +146,9 @@ request to `http://127.0.0.1:8080` plus a proxied API route.
 
 ## Checkpoint B
 
-- [ ] Two server-side sessions remain independent under interleaved and concurrent requests.
-- [ ] No refresh token reaches the browser, logs, HTML, or API responses.
-- [ ] The original cross-user regression test passes.
+- [x] Two server-side sessions remain independent under interleaved and concurrent requests.
+- [x] No refresh token reaches the browser, logs, HTML, or API responses.
+- [x] The original cross-user regression test passes.
 
 ## Phase 2: Product-flow migration
 

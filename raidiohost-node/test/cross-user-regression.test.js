@@ -1,120 +1,75 @@
 const express = require('express');
 const request = require('supertest');
-const spotifyApi = require('../src/startup/spotify');
+const cookieParser = require('cookie-parser');
 const userService = require('../src/services/user.service');
 const Topic = require('../src/models/topic.model');
-const apiRoutes = require('../src/routes/api.routes');
-const userRoutes = require('../src/routes/user.routes');
-const radioRoutes = require('../src/routes/radio.routes');
+const { createApiRouter } = require('../src/routes/api.routes');
+const { createUserRouter } = require('../src/routes/user.routes');
+const { createRadioRouter } = require('../src/routes/radio.routes');
+const { createRequireAuth, createSpotifyContext } = require('../src/middleware/auth.middleware');
 
-const originalSpotify = {
-    getMe: spotifyApi.getMe,
-    searchTracks: spotifyApi.searchTracks,
-    setAccessToken: spotifyApi.setAccessToken,
-};
-const originalFindBySpotifyId = userService.findBySpotifyId;
-const originalTopicFind = Topic.find;
-
-describe('known cross-user Spotify client regression', () => {
-    let activeToken;
+describe('cross-user request isolation regression', () => {
     let app;
-    let pendingGetMeGate;
 
     beforeEach(() => {
-        activeToken = null;
         vi.spyOn(console, 'log').mockImplementation(() => {});
-        vi.spyOn(console, 'error').mockImplementation(() => {});
-
-        spotifyApi.setAccessToken = (token) => {
-            activeToken = token;
-        };
-        spotifyApi.searchTracks = async (query) => ({
-            body: {
-                tracks: {
-                    items: [{
-                        id: `${activeToken}-${query}`,
-                        uri: `spotify:track:${activeToken}-${query}`,
-                        name: `${activeToken}-${query}`,
-                        artists: [{ name: 'Fixture Artist' }],
-                        album: { name: 'Fixture Album', images: [] },
-                    }],
-                },
-            },
-        });
-        spotifyApi.getMe = async () => {
-            if (pendingGetMeGate) {
-                const gate = pendingGetMeGate;
-                pendingGetMeGate = null;
-                gate.started();
-                await gate.wait;
-            }
-            return { body: { id: activeToken } };
-        };
-        userService.findBySpotifyId = async (spotifyId) => ({
-            _id: `db-${spotifyId}`,
-            spotifyId,
-            username: spotifyId,
-            spotifyDisplayName: spotifyId,
+        vi.spyOn(userService, 'findById').mockImplementation(async (userId) => ({
+            _id: userId,
+            spotifyId: `spotify-${userId}`,
+            username: userId,
+            spotifyDisplayName: userId,
             spotifyEmail: '',
             lastVolume: 0.5,
-        });
-        Topic.find = async (query) => ([{
+        }));
+        vi.spyOn(Topic, 'find').mockImplementation(async (query) => ([{
             _id: 'topic-1',
             name: `topic-for-${query.$or[1].createdBy}`,
-        }]);
+        }]));
+
+        const sessionService = {
+            resolve: async (token) => token ? {
+                _id: { toString: () => `session-${token}` },
+                userId: { _id: { toString: () => token }, spotifyId: `spotify-${token}` },
+            } : null,
+        };
+        const tokenService = {
+            execute: async (userId, operation) => operation({
+                searchTracks: async (query) => ({ body: { tracks: { items: [{
+                    id: `${userId}-${query}`,
+                    uri: `spotify:track:${userId}-${query}`,
+                    name: `${userId}-${query}`,
+                    artists: [{ name: 'Fixture Artist' }],
+                    album: { name: 'Fixture Album', images: [] },
+                }] } } }),
+            }),
+        };
+        const auth = createRequireAuth({ sessionService, cookieName: 'session' });
 
         app = express();
         app.use(express.json());
-        app.use('/api', apiRoutes);
-        app.use('/api/users', userRoutes);
-        app.use('/api/radio', radioRoutes);
+        app.use(cookieParser());
+        app.use('/api/users', auth, createUserRouter());
+        app.use('/api/radio', auth, createRadioRouter());
+        app.use('/api', auth, createSpotifyContext(tokenService), createApiRouter());
     });
 
-    afterEach(() => {
-        spotifyApi.getMe = originalSpotify.getMe;
-        spotifyApi.searchTracks = originalSpotify.searchTracks;
-        spotifyApi.setAccessToken = originalSpotify.setAccessToken;
-        userService.findBySpotifyId = originalFindBySpotifyId;
-        Topic.find = originalTopicFind;
-        vi.restoreAllMocks();
-    });
+    afterEach(() => vi.restoreAllMocks());
 
-    it.fails('keeps User A bound to profile and topic requests after User B uses a Spotify data route', async () => {
-        const userASearch = await request(app)
-            .get('/api/search?q=alpha')
-            .set('Authorization', 'Bearer user-a');
-        const userBSearch = await request(app)
-            .get('/api/search?q=beta')
-            .set('Authorization', 'Bearer user-b');
+    it('keeps two sessions independent across concurrent Spotify, profile, and topic requests', async () => {
+        const [userASearch, userBSearch, userAProfile, userBProfile, userATopics, userBTopics] = await Promise.all([
+            request(app).get('/api/search?q=alpha').set('Cookie', 'session=user-a'),
+            request(app).get('/api/search?q=beta').set('Cookie', 'session=user-b'),
+            request(app).get('/api/users/me').set('Cookie', 'session=user-a'),
+            request(app).get('/api/users/me').set('Cookie', 'session=user-b'),
+            request(app).get('/api/radio/topics').set('Cookie', 'session=user-a'),
+            request(app).get('/api/radio/topics').set('Cookie', 'session=user-b'),
+        ]);
 
         expect(userASearch.body.tracks[0].name).toBe('user-a-alpha');
         expect(userBSearch.body.tracks[0].name).toBe('user-b-beta');
-
-        const interleaveWithUserB = async (userAPath, userBQuery) => {
-            let releaseGetMe;
-            let markGetMeStarted;
-            const getMeStarted = new Promise((resolve) => { markGetMeStarted = resolve; });
-            pendingGetMeGate = {
-                started: markGetMeStarted,
-                wait: new Promise((resolve) => { releaseGetMe = resolve; }),
-            };
-
-            const userARequest = request(app)
-                .get(userAPath)
-                .set('Authorization', 'Bearer user-a')
-                .then((response) => response);
-            await getMeStarted;
-            await request(app)
-                .get(`/api/search?q=${userBQuery}`)
-                .set('Authorization', 'Bearer user-b');
-            releaseGetMe();
-            return userARequest;
-        };
-
-        const userAProfile = await interleaveWithUserB('/api/users/me', 'profile-race');
-        const userATopics = await interleaveWithUserB('/api/radio/topics', 'topic-race');
-
-        expect(userAProfile.body.spotifyId).toBe('user-a');
-        expect(userATopics.body.topics[0].name).toBe('topic-for-db-user-a');
+        expect(userAProfile.body.spotifyId).toBe('spotify-user-a');
+        expect(userBProfile.body.spotifyId).toBe('spotify-user-b');
+        expect(userATopics.body.topics[0].name).toBe('topic-for-user-a');
+        expect(userBTopics.body.topics[0].name).toBe('topic-for-user-b');
     });
 });
