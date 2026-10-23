@@ -1,216 +1,90 @@
 const express = require('express');
-const router = express.Router();
 const spotifyApi = require('../startup/spotify');
-const userService = require('../services/user.service');
+const defaultUserService = require('../services/user.service');
+const defaultOAuthTransactionService = require('../services/oauth-transaction.service');
+const defaultSessionService = require('../services/session.service');
 
-// Module-level cache so /auth/token can return the full token payload.
-let cachedTokenMeta = { refreshToken: null, expiresIn: 3600 };
-// Single interval handle — prevents duplicate refresh loops on multiple logins.
-let refreshInterval = null;
+const SCOPES = [
+    'streaming', 'user-read-private', 'user-read-email', 'user-top-read', 'user-library-read',
+    'playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public',
+    'playlist-modify-private', 'user-read-playback-state', 'user-read-currently-playing',
+    'user-modify-playback-state',
+];
 
-router.get('/login', (req, res) => {
-    const scopes = ['streaming', 'user-read-private', 'user-read-email',
-        'user-top-read', 'user-library-read',
-        'playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public', 'playlist-modify-private',
-        'user-read-playback-state', 'user-read-currently-playing', 'user-modify-playback-state'];
-    const authUrl = spotifyApi.createAuthorizeURL(scopes, undefined, true);
-    res.redirect(authUrl);
-});
+function createAuthRouter({
+    createSpotifyClient = () => spotifyApi.createClient(),
+    oauthTransactionService = defaultOAuthTransactionService,
+    sessionService = defaultSessionService,
+    userService = defaultUserService,
+    config,
+}) {
+    const router = express.Router();
+    const clearCookieOptions = {
+        httpOnly: config.session.cookie.httpOnly,
+        secure: config.session.cookie.secure,
+        sameSite: config.session.cookie.sameSite,
+        path: '/',
+    };
+    const cookieOptions = {
+        ...clearCookieOptions,
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+    };
 
-router.get('/callback', async (req, res) => {
-    const code = req.query.code;
-    const error = req.query.error;
+    router.get('/login', async (_request, response) => {
+        const state = await oauthTransactionService.create('/');
+        response.redirect(createSpotifyClient().createAuthorizeURL(SCOPES, state, true));
+    });
 
-    if (error) {
-        console.error('Spotify authorization callback was denied');
-        return res.send(`Callback Error: ${error}`);
-    }
+    router.get('/callback', async (request, response) => {
+        const transaction = await oauthTransactionService.consume(request.query.state);
+        if (!transaction) {
+            return response.status(400).json({ error: { code: 'invalid_oauth_state', message: 'Sign-in request is invalid or expired' } });
+        }
+        if (request.query.error) return response.redirect(`${config.web.appOrigin}/?auth=denied`);
+        if (!request.query.code) {
+            return response.status(400).json({ error: { code: 'missing_authorization_code', message: 'Authorization code is required' } });
+        }
 
-    spotifyApi.authorizationCodeGrant(code).then(async data => {
-        const accessToken = data.body['access_token'];
-        const refreshToken = data.body['refresh_token'];
-        const expiresIn = data.body['expires_in'];
-
-        spotifyApi.setAccessToken(accessToken);
-        spotifyApi.setRefreshToken(refreshToken);
-        cachedTokenMeta = { refreshToken, expiresIn };
-
-        // Upsert user in MongoDB — wrapped so DB errors never break the auth flow.
         try {
-            const meData = await spotifyApi.getMe();
-            const user = await userService.upsertUser(meData.body, {
-                accessToken,
-                refreshToken,
-                tokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
+            const client = createSpotifyClient();
+            const grant = await client.authorizationCodeGrant(request.query.code);
+            const accessToken = grant.body.access_token;
+            const refreshToken = grant.body.refresh_token;
+            const expiresIn = grant.body.expires_in;
+            client.setAccessToken(accessToken);
+            client.setRefreshToken(refreshToken);
+            const profile = await client.getMe();
+            const user = await userService.upsertUser(profile.body, {
+                accessToken, refreshToken, tokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
             });
-
-            // Auto-detect location from IP on first sign-in (only when no location is stored).
-            if (!user.location?.city) {
-                try {
-                    const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-                        || req.socket?.remoteAddress
-                        || '';
-                    const ip = rawIp.replace(/^::ffff:/, '');
-                    const isPrivate = !ip
-                        || ip === '127.0.0.1'
-                        || ip === '::1'
-                        || /^10\./.test(ip)
-                        || /^192\.168\./.test(ip)
-                        || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
-
-                    if (!isPrivate) {
-                        const geoRes = await fetch(
-                            `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,city,country,lat,lon`
-                        );
-                        if (geoRes.ok) {
-                            const geo = await geoRes.json();
-                            if (geo.status === 'success' && geo.city) {
-                                const cityDisplay = geo.country ? `${geo.city}, ${geo.country}` : geo.city;
-                                await userService.updateLocation(user.spotifyId, {
-                                    city: cityDisplay,
-                                    latitude: geo.lat,
-                                    longitude: geo.lon,
-                                });
-                            }
-                        }
-                    }
-                } catch (geoErr) {
-                    console.warn('IP geolocation failed (non-fatal):', geoErr.message);
-                }
-            }
-        } catch (dbErr) {
-            console.error('User upsert failed (non-fatal):', dbErr.message);
+            await sessionService.revoke(request.cookies?.[config.session.cookie.name]);
+            const sessionToken = await sessionService.create(user._id);
+            response.cookie(config.session.cookie.name, sessionToken, cookieOptions);
+            return response.redirect(new URL(transaction.returnTo || '/', config.web.appOrigin).toString());
+        } catch {
+            return response.status(502).json({ error: { code: 'spotify_authorization_failed', message: 'Unable to complete Spotify sign-in' } });
         }
+    });
 
-        clearInterval(refreshInterval);
-        refreshInterval = setInterval(async () => {
-            const data = await spotifyApi.refreshAccessToken();
-            const accessToken = data.body['access_token'];
-            spotifyApi.setAccessToken(accessToken);
-            console.log('Spotify access token refreshed');
-
-            // Keep stored token in sync — non-fatal if it fails.
-            try {
-                const meData = await spotifyApi.getMe();
-                const spotifyId = meData.body?.id;
-                if (spotifyId) {
-                    await userService.updateAccessToken(spotifyId, {
-                        accessToken,
-                        tokenExpiresAt: new Date(Date.now() + (expiresIn - 60) * 1000),
-                    });
-                }
-            } catch (dbErr) {
-                console.error('Token refresh DB update failed (non-fatal):', dbErr.message);
-            }
-        }, (expiresIn - 60) * 1000);
-
-
-        const jsondata = {
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-            expiresIn: expiresIn
-        };
-        
-        return res.send(`
-            <!doctype html>
-            <html>
-                <body style="font-family: sans-serif; padding: 16px;">
-                    <p>Spotify login complete. You can close this window.</p>
-                    <p>Access Token: ${accessToken}</p>
-                    <p>Refresh Token: ${refreshToken}</p>
-                    <p>Expires In: ${expiresIn} seconds</p>
-                    <script>
-                        try {
-                            window.opener?.postMessage(${JSON.stringify(jsondata)}, '*');
-                        } catch (error) {
-                            console.error('Unable to send Spotify auth result to opener:', error);
-                        }
-
-                        <!-- window.setTimeout(() => window.close(), 1000); -->
-                        window.setTimeout(() => window.close(), 1000);
-                    </script>
-                </body>
-            </html>
-        `);
-    })
-    .catch(_error => {
-        console.error('Spotify token exchange failed');
-        res.status(500).send('Error getting Spotify tokens');
-    });    
-});
-
-router.post('/refresh', async (req, res) => {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-        return res.status(400).json({ error: 'refreshToken is required' });
-    }
-    try {
-        spotifyApi.setRefreshToken(refreshToken);
-        const data = await spotifyApi.refreshAccessToken();
-        const accessToken = data.body['access_token'];
-        const expiresIn = data.body['expires_in'] ?? cachedTokenMeta.expiresIn;
-
-        spotifyApi.setAccessToken(accessToken);
-        cachedTokenMeta = { ...cachedTokenMeta, expiresIn };
-
-        // Sync DB — non-fatal if it fails.
-        try {
-            const user = await userService.findByRefreshToken(refreshToken);
-            if (user?.spotifyId) {
-                await userService.updateAccessToken(user.spotifyId, {
-                    accessToken,
-                    tokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
-                });
-            }
-        } catch (dbErr) {
-            console.error('Token refresh DB update failed (non-fatal):', dbErr.message);
+    router.get('/session', async (request, response) => {
+        const session = await sessionService.resolve(request.cookies?.[config.session.cookie.name]);
+        if (!session?.userId) {
+            return response.status(401).json({ error: { code: 'unauthenticated', message: 'Sign in required' } });
         }
-
-        return res.json({ accessToken, expiresIn });
-    } catch (err) {
-        console.error('Spotify token refresh failed with status:', err?.statusCode ?? 400);
-        return res.status(err.statusCode ?? 400).json({ error: err.message ?? 'Token refresh failed' });
-    }
-});
-
-router.get('/token', (req, res) => {
-    const accessToken = spotifyApi.getAccessToken();
-    if (!accessToken) {
-        return res.status(401).json({ error: 'Not authenticated' });
-    }
-    return res.json({
-        accessToken,
-        refreshToken: cachedTokenMeta.refreshToken,
-        expiresIn: cachedTokenMeta.expiresIn,
+        return response.json({ user: {
+            id: session.userId._id.toString(),
+            spotifyId: session.userId.spotifyId,
+            username: session.userId.username,
+        } });
     });
-});
 
-router.get('/tokens', (req, res) => {
-    const code = req.query.code;
-
-    if (!code) {
-        return res.status(400).json({ error: 'Authorization code is required' });
-    }
-
-    spotifyApi.authorizationCodeGrant(code).then(data => {
-        const accessToken = data.body['access_token'];
-        const refreshToken = data.body['refresh_token'];
-        const expiresIn = data.body['expires_in'];
-        spotifyApi.setAccessToken(accessToken);
-        spotifyApi.setRefreshToken(refreshToken);
-
-        console.log('Spotify token exchange completed');
-
-        return res.json({
-            accessToken,
-            refreshToken,
-            expiresIn
-        });
-    })
-    .catch(_error => {
-        console.error('Spotify token exchange failed');
-        res.status(500).json({ error: 'Error getting Tokens' });
+    router.post('/logout', async (request, response) => {
+        await sessionService.revoke(request.cookies?.[config.session.cookie.name]);
+        response.clearCookie(config.session.cookie.name, clearCookieOptions);
+        return response.status(204).end();
     });
-});
 
-module.exports = router;
+    return router;
+}
+
+module.exports = { createAuthRouter, SCOPES };

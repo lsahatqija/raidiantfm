@@ -12,9 +12,11 @@ const app = express();
 
 require('./startup/spotify').initialize(runtimeConfig.spotify);
 require('./services/user.service').initializeTokenEncryption(runtimeConfig.tokens.encryptionKey);
+require('./services/oauth-transaction.service').initialize(runtimeConfig.session.secret);
+require('./services/session.service').initialize(runtimeConfig.session.secret);
 require('./startup/db')(runtimeConfig);
 require('./startup/config')(app, runtimeConfig);
-require('./startup/routes')(app);
+require('./startup/routes')(app, runtimeConfig);
 
 app.listen(runtimeConfig.server.port, () => {
     console.log(`Server is running on port ${runtimeConfig.server.port}`);
