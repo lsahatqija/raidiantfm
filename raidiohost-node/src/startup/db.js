@@ -1,15 +1,9 @@
 const mongoose = require('mongoose');
 const { seedSystemTopics } = require('./seedTopics');
 
-module.exports = async function connectDB() {
-    const uri = process.env.MONGODB_URI;
-
-    if (!uri) {
-        throw new Error('FATAL ERROR: MONGODB_URI is not defined!');
-    }
-
+module.exports = async function connectDB(runtimeConfig) {
     try {
-        await mongoose.connect(uri);
+        await mongoose.connect(runtimeConfig.database.uri);
         console.log('MongoDB connected');
         await seedSystemTopics();
     } catch (err) {
