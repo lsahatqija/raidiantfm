@@ -35,11 +35,18 @@ services:
     env_file:
       - raidiohost-node/.env
     environment:
-      NODE_ENV: production
+      # This Compose stack is the loopback development topology. Production
+      # must supply HTTPS origins/redirects and secure cookies separately.
+      NODE_ENV: development
       PORT: 3050
       MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-raidiantfm}:${MONGO_ROOT_PASSWORD}@db:27017/raidiohost?authSource=admin
       CORS_ORIGINS: http://127.0.0.1:${WEB_PORT:-8080}
       REDIRECT_URL: http://127.0.0.1:${WEB_PORT:-8080}/auth/callback
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN in the root .env file}
+      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY in the root .env file}
+      COOKIE_SECURE: ${COOKIE_SECURE:?Set COOKIE_SECURE in the root .env file}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in the root .env file}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?Set TOKEN_ENCRYPTION_KEY in the root .env file}
     depends_on:
       db:
         condition: service_healthy
