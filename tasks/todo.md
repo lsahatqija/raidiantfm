@@ -2,7 +2,18 @@
 
 Implementation is intentionally gated on approval of `tasks/plan.md` and the product decisions listed there.
 
+## Progress summary (2026-10-25)
+
+- **Completed:** Tasks 2-17, including the distributed container baseline (Task 3A), and Checkpoints B and D.
+- **Partially complete:** Task 1 and Checkpoint A. Secrets are untracked and the history-cleanup decision is recorded, but rotation of the previously exposed Spotify, MongoDB, and session/encryption credentials is not yet recorded as complete.
+- **Verification still outstanding:** Both Checkpoint C scenarios: concurrent full-flow browser isolation and backend restart/scale identity continuity.
+- **Not started:** Tasks 18-24 (Phases 4-6) and Checkpoints E and F.
+
 ## Phase 0: Containment and executable baseline
+
+**Status (2026-10-25):** Tasks 2, 3, and 3A are complete. Task 1 remains
+partially complete pending recorded rotation of all credentials that were
+previously exposed.
 
 ### Task 1: Rotate and untrack repository secrets
 
@@ -230,12 +241,12 @@ sandbox smoke procedure is documented for deployment owners.
 
 ## Phase 3: Security, privacy, and operations
 
-**Status (2026-10-25):** Tasks 14-17 are complete on `feature/phase-3`.
+**Status (2026-10-25):** Tasks 14-17 are complete and merged into `main`.
 Outbound RSS/weather/geocoding requests are destination-pinned and bounded,
 request inputs and shared Mongo-backed abuse limits are enforced, location is
 explicitly opt-in and city-only, account export/deletion covers server and
 browser-held state, and production logging/readiness/shutdown/CI gates are in
-place. The workspace gate passes with 86 backend tests, 24 frontend tests, the
+place. The workspace gate passes with 86 backend tests, 25 frontend tests, the
 production build, Chromium E2E, a zero-vulnerability production audit, and
 verified registry signatures for all installed packages.
 
@@ -299,6 +310,8 @@ verified registry signatures for all installed packages.
 
 ## Phase 4: PWA shell
 
+**Status (2026-10-25):** Not started. Tasks 18-21 and Checkpoint E remain.
+
 ### Task 18: Add manifest, icons, and platform metadata
 
 **Description:** Create the web app manifest and complete icon/theme metadata without overwriting the existing unrelated title edit.
@@ -358,6 +371,8 @@ verified registry signatures for all installed packages.
 
 ## Phase 5: OS media integration
 
+**Status (2026-10-25):** Not started. Tasks 22-23 and Checkpoint F remain.
+
 ### Task 22: Integrate Media Session controls
 
 **Description:** Publish current Spotify metadata/state/position to the OS and bind supported actions to the SDK player.
@@ -390,6 +405,8 @@ verified registry signatures for all installed packages.
 - [ ] Release candidate passes all CI, E2E, install, mobile, auth-isolation, and security checks.
 
 ## Phase 6: Optional native widgets (separate approval)
+
+**Status (2026-10-25):** Not started and requires separate product approval.
 
 ### Task 24: Run a native-container/widget feasibility spike
 
