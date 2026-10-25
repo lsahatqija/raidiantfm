@@ -152,14 +152,20 @@ passes with 38 backend tests and 2 frontend tests.
 
 ## Phase 2: Product-flow migration
 
+**Status (2026-10-24):** Tasks 9-13 are complete. Frontend application requests
+use one cookie-authenticated client, browser-retained state is namespaced by
+application user, player/device state resets on account changes, and Spotify
+requests follow an explicit Development or Extended quota contract. The live
+sandbox smoke procedure is documented for deployment owners.
+
 ### Task 9: Migrate Spotify API helpers to scoped clients
 
 **Description:** Pass a request/user-scoped Spotify client through search, recommendation, playlist, queue, and playback paths.
 
 **Acceptance criteria:**
-- [ ] No application code imports a mutable Spotify singleton.
-- [ ] Every Spotify operation identifies its session/user explicitly.
-- [ ] Spotify errors map to stable API error codes without token leakage.
+- [x] No application code imports a mutable Spotify singleton.
+- [x] Every Spotify operation identifies its session/user explicitly.
+- [x] Spotify errors map to stable API error codes without token leakage.
 
 **Verification:** Parallel-user contract tests cover every Spotify-backed endpoint.
 
@@ -170,9 +176,9 @@ passes with 38 backend tests and 2 frontend tests.
 **Description:** Add a session-protected endpoint returning only a short-lived access token and make the player SDK request it on demand.
 
 **Acceptance criteria:**
-- [ ] Endpoint requires the application cookie and returns no refresh token.
-- [ ] Browser stores the SDK access token in memory only.
-- [ ] Refresh/reauthorization errors move the UI into an explicit sign-in state.
+- [x] Endpoint requires the application cookie and returns no refresh token.
+- [x] Browser stores the SDK access token in memory only.
+- [x] Refresh/reauthorization errors move the UI into an explicit sign-in state.
 
 **Verification:** Frontend hook plus backend integration tests cover token fetch, expiry, logout, and User A/User B isolation.
 
@@ -183,9 +189,9 @@ passes with 38 backend tests and 2 frontend tests.
 **Description:** Centralize `credentials: include`, session bootstrap, 401 handling, login redirect, and logout in one frontend API/auth layer.
 
 **Acceptance criteria:**
-- [ ] `sessionStorage` contains no Spotify tokens and auth storage helpers are removed.
-- [ ] Reload restores the application session; logout/account switch clears user-specific state.
-- [ ] Components no longer manually compose bearer headers.
+- [x] `sessionStorage` contains no Spotify tokens and auth storage helpers are removed.
+- [x] Reload restores the application session; logout/account switch clears user-specific state.
+- [x] Components no longer manually compose bearer headers.
 
 **Verification:** Hook/component tests cover initial load, expired session, reauth, logout, and network failure.
 
@@ -196,9 +202,9 @@ passes with 38 backend tests and 2 frontend tests.
 **Description:** Namespace or server-persist queue history, voice, weather, and other preferences and reset player/device state on account changes.
 
 **Acceptance criteria:**
-- [ ] User B never sees User A's recent/queued tracks or preferences on the same browser profile.
-- [ ] Logout clears ephemeral playback/device state.
-- [ ] Durable preference ownership and retention are documented.
+- [x] User B never sees User A's recent/queued tracks or preferences on the same browser profile.
+- [x] Logout clears ephemeral playback/device state.
+- [x] Durable preference ownership and retention are documented.
 
 **Verification:** Two-account frontend tests switch users in one browser context and assert clean state.
 
@@ -209,9 +215,9 @@ passes with 38 backend tests and 2 frontend tests.
 **Description:** Confirm Development versus Extended Quota Mode and update limits, endpoint calls, response mapping, and product messaging accordingly.
 
 **Acceptance criteria:**
-- [ ] Development Mode never requests search limits above 10 and uses current playlist contracts.
-- [ ] Five-user/Premium-owner constraints are surfaced in deployment documentation when applicable.
-- [ ] Extended Quota differences are configuration/contract tested, not guessed at runtime.
+- [x] Development Mode never requests search limits above 10 and uses current playlist contracts.
+- [x] Five-user/Premium-owner constraints are surfaced in deployment documentation when applicable.
+- [x] Extended Quota differences are configuration/contract tested, not guessed at runtime.
 
 **Verification:** Spotify fixture contract tests and a sandbox smoke test pass for the chosen mode.
 

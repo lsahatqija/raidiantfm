@@ -4,10 +4,56 @@ const {
     findSimilarTrack,
 } = require('./api.functions');
 
-function respondToSpotifyAuthFailure(res, error) {
-    if (!['reauth_required', 'spotify_refresh_unavailable'].includes(error?.code)) return false;
-    res.status(error.statusCode || 401).json({ error: { code: error.code, message: error.message } });
-    return true;
+function describeSpotifyFailure(error) {
+    if (error?.code === 'reauth_required') {
+        return { status: error.statusCode || 401, code: error.code, message: 'Spotify authorization is required' };
+    }
+    if (error?.code === 'spotify_refresh_unavailable') {
+        return {
+            status: error.statusCode || 503,
+            code: error.code,
+            message: 'Spotify authorization refresh is temporarily unavailable',
+        };
+    }
+
+    const status = Number(error?.statusCode || error?.body?.error?.status);
+    if (status === 401) {
+        return { status, code: 'reauth_required', message: 'Spotify authorization is required' };
+    }
+    if (status === 403) {
+        return { status, code: 'spotify_forbidden', message: 'Spotify denied this request' };
+    }
+    if (status === 429) {
+        if (error?.body?.error?.reason === 'QUOTA_EXCEEDED') {
+            return {
+                status,
+                code: 'spotify_quota_exceeded',
+                message: 'Spotify request quota is temporarily exhausted',
+            };
+        }
+        return { status, code: 'spotify_rate_limited', message: 'Spotify is temporarily rate limited' };
+    }
+    return { status: 502, code: 'spotify_unavailable', message: 'Spotify is temporarily unavailable' };
+}
+
+function logSpotifyFailure(operation, failure) {
+    console.error('Spotify request failed', {
+        operation,
+        code: failure.code,
+        status: failure.status,
+    });
+}
+
+function respondToSpotifyFailure(res, error, operation) {
+    const failure = describeSpotifyFailure(error);
+    const retryAfter = Number.parseInt(error?.headers?.['retry-after'], 10);
+    if (failure.status === 429 && Number.isInteger(retryAfter) && retryAfter >= 0) {
+        res.set('Retry-After', String(retryAfter));
+    }
+    logSpotifyFailure(operation, failure);
+    return res.status(failure.status).json({
+        error: { code: failure.code, message: failure.message },
+    });
 }
 
 async function search(req, res) {
@@ -18,14 +64,13 @@ async function search(req, res) {
     }
 
     try {
-        const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit: 10 }));
+        const limit = req.spotifyContract.clampSearchLimit(req.query.limit || 10);
+        const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit }));
         const tracks = data.body.tracks.items.map(mapTrack);
         console.log('Found tracks:', tracks);
         return res.json({ tracks });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error searching tracks:', error);
-        return res.status(500).json({ error: 'Error searching tracks', tracks: [] });
+        return respondToSpotifyFailure(res, error, 'search');
     }
 }
 
@@ -38,10 +83,7 @@ async function suggestions(req, res) {
         console.log('Suggested tracks:', tracks);
         return res.json({ tracks });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error fetching suggestions:', error);
-        const statusCode = error?.statusCode === 401 ? 401 : 500;
-        return res.status(statusCode).json({ error: 'Error fetching suggestions', tracks: [] });
+        return respondToSpotifyFailure(res, error, 'suggestions');
     }
 }
 
@@ -55,7 +97,9 @@ async function queueNext(req, res) {
 
     try {
         const { queuedTrack, matchedGenre, strategy } = await req.spotify.execute(
-            (spotifyApi) => findSimilarTrack(spotifyApi, trackInput, recentTracks),
+            (spotifyApi) => findSimilarTrack(spotifyApi, trackInput, recentTracks, {
+                maxSearchLimit: req.spotifyContract.maxSearchLimit,
+            }),
         );
 
         if (!queuedTrack) {
@@ -71,12 +115,16 @@ async function queueNext(req, res) {
         console.log('Queued next track:', mappedTrack, 'strategy:', strategy);
         return res.json({ track: mappedTrack, genre: matchedGenre, strategy });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error queueing next track:', error);
+        const failure = describeSpotifyFailure(error);
+        if (['reauth_required', 'spotify_refresh_unavailable'].includes(failure.code)) {
+            return respondToSpotifyFailure(res, error, 'queue-next');
+        }
+        logSpotifyFailure('queue-next', failure);
         return res.json({
             track: null,
             strategy: 'error-non-blocking',
             warning: 'Queue lookup failed and was skipped.',
+            error: { code: failure.code, message: failure.message },
         });
     }
 }
@@ -90,16 +138,22 @@ async function playlists(req, res) {
             const result = await spotifyApi.getUserPlaylists({ limit, offset });
             const playlistItems = Array.isArray(result.body?.items) ? result.body.items : [];
             const mapped = await Promise.all(playlistItems.map(async (pl) => {
-            let trackCount = Number(pl?.items?.total ?? 0);
+            let trackCount = req.spotifyContract.getPlaylistItemTotal(pl);
 
             // Some playlist payloads can report an empty/partial tracks object.
-            // Fallback to a lightweight playlist lookup to get tracks(total).
+            // Fallback to a lightweight playlist lookup to get items(total).
             if (trackCount <= 0 && pl?.id) {
                 try {
-                    const details = await spotifyApi.getPlaylist(pl.id, { fields: 'tracks(total)' });
-                    trackCount = Number(details.body?.items?.total ?? trackCount);
+                    const details = await spotifyApi.getPlaylist(pl.id, {
+                        fields: req.spotifyContract.playlistTotalFields,
+                    });
+                    trackCount = req.spotifyContract.getPlaylistItemTotal(details.body) || trackCount;
                 } catch (detailsErr) {
-                    console.warn(`Unable to resolve track count for playlist ${pl.id}:`, detailsErr?.message || detailsErr);
+                    const failure = describeSpotifyFailure(detailsErr);
+                    console.warn('Spotify playlist count lookup failed', {
+                        code: failure.code,
+                        status: failure.status,
+                    });
                 }
             }
 
@@ -120,16 +174,13 @@ async function playlists(req, res) {
 
         return res.json({ playlists: playlistsResult, total: data.body?.total ?? 0, limit, offset });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error fetching playlists:', error);
-        const statusCode = error?.statusCode === 401 ? 401 : error?.statusCode === 403 ? 403 : 500;
-        return res.status(statusCode).json({ error: 'Error fetching playlists', playlists: [] });
+        return respondToSpotifyFailure(res, error, 'playlists');
     }
 }
 
 async function playlistTracks(req, res) {
     const { id } = req.params;
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 50);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
     if (!id) {
@@ -137,25 +188,21 @@ async function playlistTracks(req, res) {
     }
 
     try {
-        const data = await req.spotify.execute((spotifyApi) => spotifyApi.getPlaylist(id, { limit, offset }));
-        const items = data.body?.items?.items ?? [];
-        const total = data.body?.items?.total ?? 0;
+        const data = await req.spotify.execute((spotifyApi) => (
+            req.spotifyContract.getPlaylistItems(spotifyApi, id, { limit, offset })
+        ));
+        const items = data.body?.items ?? [];
+        const total = data.body?.total ?? 0;
 
         const tracks = items
-            .filter((item) => item?.item?.uri)
-            .map((item) => mapTrack(item.item));
+            .filter((entry) => entry?.item?.uri)
+            .map((entry) => mapTrack(entry.item));
 
         console.log(`Fetched playlist ${id} tracks, offset: ${offset}, returned: ${tracks.length}, total: ${total}`);
 
         return res.json({ tracks, total, limit, offset });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error fetching playlist tracks:', error);
-        const statusCode = error?.statusCode === 401 ? 401 : error?.statusCode === 403 ? 403 : 500;
-        const errorMessage = statusCode === 403
-            ? 'Spotify denied access to this playlist.'
-            : 'Error fetching playlist tracks';
-        return res.status(statusCode).json({ error: errorMessage, tracks: [] });
+        return respondToSpotifyFailure(res, error, 'playlist-items');
     }
 }
 
@@ -172,9 +219,7 @@ async function play(req, res) {
         console.log('Playing track:', uri);
         return res.json({ ok: true, message: 'Track playing!' });
     } catch (error) {
-        if (respondToSpotifyAuthFailure(res, error)) return;
-        console.error('Error playing track:', error);
-        return res.status(500).json({ ok: false, error: 'Error playing track' });
+        return respondToSpotifyFailure(res, error, 'play');
     }
 }
 

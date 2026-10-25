@@ -52,6 +52,13 @@
   padding: 0;
 }
 
+.header-search-slot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .header-search-slot .search-form {
   justify-content: flex-end;
   flex-wrap: nowrap;
@@ -285,6 +292,12 @@ h1 {
 .login-section {
   text-align: center;
   padding: 48px 20px;
+}
+
+.auth-error {
+  margin: 12px 20px 0;
+  text-align: center;
+  color: #b91c1c;
 }
 
 .login-button {

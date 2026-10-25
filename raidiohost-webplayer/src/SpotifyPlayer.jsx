@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import './SpotifyPlayer.css';
 
-const SERVER_BASE = import.meta.env.VITE_SERVER_BASE_URL;
-
 function clampVolume(value) {
     if (typeof value !== 'number' || Number.isNaN(value)) {
         return 0.5;
@@ -27,7 +25,8 @@ function normalizePlayerTrack(track) {
 }
 
 export default function SpotifyPlayer({
-    accessToken,
+    isAuthenticated,
+    getSpotifyAccessToken,
     onReady,
     queuedTrack,
     isQueueLoading = false,
@@ -66,18 +65,20 @@ export default function SpotifyPlayer({
     };
 
     useEffect(() => {
-        if (!accessToken) return;
+        if (!isAuthenticated) return;
 
         const initPlayer = () => {
             const player = new window.Spotify.Player({
                 name: 'RAIdio Host Web Player',
                 getOAuthToken: async (cb) => {
                     try {
-                        const res = await fetch(`${SERVER_BASE}/auth/token`, { credentials: 'include' });
-                        const data = await res.json();
-                        cb(data.accessToken);
-                    } catch {
-                        cb(accessToken);
+                        cb(await getSpotifyAccessToken());
+                    } catch (tokenError) {
+                        const requiresSignIn = tokenError?.status === 401
+                            || tokenError?.code === 'reauth_required';
+                        setError(requiresSignIn
+                            ? 'Your Spotify session expired. Sign in again.'
+                            : 'Unable to connect to Spotify. Try again shortly.');
                     }
                 },
                 volume: 0.5,
@@ -140,7 +141,7 @@ export default function SpotifyPlayer({
             playerRef.current?.disconnect();
             playerRef.current = null;
         };
-    }, [accessToken, onReady]);
+    }, [getSpotifyAccessToken, isAuthenticated, onReady]);
 
     useEffect(() => {
         const duration = playerState?.duration ?? playerState?.track_window?.current_track?.duration_ms ?? 0;
@@ -209,9 +210,9 @@ export default function SpotifyPlayer({
 
             {error && <p className="song-status song-error">{error}</p>}
 
-            {!accessToken && <p className="song-status">Log in with Spotify to start playing.</p>}
+            {!isAuthenticated && <p className="song-status">Log in with Spotify to start playing.</p>}
 
-            {accessToken && !isReady && !error && (
+            {isAuthenticated && !isReady && !error && (
                 <p className="song-status">Connecting to Spotify...</p>
             )}
 

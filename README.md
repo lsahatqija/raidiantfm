@@ -49,3 +49,10 @@ npm test
 
 All Spotify API work must follow [AGENTS.md](./AGENTS.md), the official Spotify OpenAPI schema, current authorization guidance, and the Spotify Developer Terms.
 
+Set `SPOTIFY_QUOTA_MODE=development` unless Spotify has approved the configured
+Client ID for Extended Quota Mode. Development Mode requires a Premium app owner,
+supports at most five allowlisted users, caps search results at 10, and restricts
+playlist-item reads to owned or collaborative playlists. See
+[Phase 2 State and Spotify Operations](./tasks/phase-2-operations.md) for the
+browser-retention contract and authorized sandbox smoke procedure.
+

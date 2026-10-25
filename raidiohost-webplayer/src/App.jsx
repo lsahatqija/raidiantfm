@@ -10,11 +10,13 @@ import { useSearch } from "./hooks/useSearch";
 import { useSpeech } from "./hooks/useSpeech";
 import { useUserProfile } from "./hooks/useUserProfile";
 import { getNameInitials } from "./utils/profileUtils";
-import { BLURB_WAIT_TIMEOUT_MS, SERVER_BASE } from "./utils/constants";
+import { BLURB_WAIT_TIMEOUT_MS } from "./utils/constants";
 import { TopicsDropdown } from "./TopicsDropdown";
 import { VoiceSelector } from "./VoiceSelector";
 import { LocationSelector } from "./LocationSelector";
 import { ArticlePanel } from "./ArticlePanel";
+import { apiRequest } from "./api/client";
+import { getUserStorage } from "./utils/userStorage";
 
 function shuffleItems(items) {
   const nextItems = [...items];
@@ -28,24 +30,36 @@ function shuffleItems(items) {
 }
 
 function App() {
-  const { accessToken, handleLogin } = useAuth();
+  const {
+    authError,
+    getSpotifyAccessToken,
+    handleLogin,
+    handleLogout,
+    isAuthenticated,
+    isAuthLoading,
+    user,
+  } = useAuth();
+  const sessionKey = isAuthenticated ? user?.id ?? null : null;
   const {
     speak, cancel, isSpeaking, setSpeechVolume,
     personalities, activeVoiceName, setActiveVoice,
     speechRate, setSpeechRate, speechPitch, setSpeechPitch,
     activePersonality, setActivePersonality,
-  } = useSpeech();
+  } = useSpeech(sessionKey);
   const activePersonalityRef = useRef(activePersonality);
   useEffect(() => { activePersonalityRef.current = activePersonality; }, [activePersonality]);
   const [playlistOrder, setPlaylistOrder] = useState([]);
   const preservedPlaylistScrollRef = useRef(null);
-  const [hostBlurb, setHostBlurb] = useState(null);
-  const [isBlurbLoading, setIsBlurbLoading] = useState(false);
+  const [hostBlurbState, setHostBlurbState] = useState({ sessionKey: null, text: null });
+  const [blurbLoadingSessionKey, setBlurbLoadingSessionKey] = useState(null);
   const blurbRequestIdRef = useRef(0);
   // Holds the Promise for the currently-in-flight blurb fetch; resolves with the text (or null)
   const blurbReadyRef = useRef(Promise.resolve(null));
-  const [hostArticles, setHostArticles] = useState([]);
+  const [hostArticlesState, setHostArticlesState] = useState({ sessionKey: null, articles: [] });
   const [isArticlePanelOpen, setIsArticlePanelOpen] = useState(false);
+  const hostBlurb = hostBlurbState.sessionKey === sessionKey ? hostBlurbState.text : null;
+  const hostArticles = hostArticlesState.sessionKey === sessionKey ? hostArticlesState.articles : [];
+  const isBlurbLoading = Boolean(sessionKey && blurbLoadingSessionKey === sessionKey);
 
   const {
     userProfile,
@@ -72,7 +86,7 @@ function App() {
     handleLocationQueryChange,
     handleSelectLocation,
     saveLastVolume,
-  } = useUserProfile(accessToken);
+  } = useUserProfile(sessionKey);
 
   // Keep speech volume in sync with the player volume slider
   useEffect(() => {
@@ -115,7 +129,7 @@ function App() {
     handlePlayQueuedTrack,
     handlePlayPlaylist,
     handleTrackEnded,
-  } = useQueue(accessToken, { onBeforeNextTrack });
+  } = useQueue(sessionKey, { onBeforeNextTrack });
 
   const {
     playlists,
@@ -125,7 +139,7 @@ function App() {
     playlistsRef,
     loadMorePlaylists,
     scrollPlaylists,
-  } = usePlaylists(accessToken);
+  } = usePlaylists(sessionKey);
 
   const {
     searchResults,
@@ -136,7 +150,7 @@ function App() {
     handleManualSearchStart,
     refreshSuggestions,
     scrollResults,
-  } = useSearch(accessToken);
+  } = useSearch(sessionKey);
 
   const visiblePlaylists = playlists.filter(
     (playlist) => playlist.ownerId === userProfile?.spotifyId || playlist.collaborative,
@@ -167,18 +181,19 @@ function App() {
     let resolveBlurb;
     blurbReadyRef.current = new Promise((resolve) => { resolveBlurb = resolve; });
 
-    if (!accessToken) {
+    if (!sessionKey) {
       resolveBlurb(null);
       return;
     }
 
     const requestId = ++blurbRequestIdRef.current;
-    setIsBlurbLoading(true);
+    setBlurbLoadingSessionKey(sessionKey);
     let blurbText = null;
     try {
       const body = {};
-      const savedUnits = typeof window !== 'undefined' ? window.localStorage.getItem('weatherUnits') : null;
-      body.weatherUnits = savedUnits === 'imperial' ? 'imperial' : 'metric';
+      body.weatherUnits = getUserStorage(sessionKey, 'weather-units', 'metric') === 'imperial'
+        ? 'imperial'
+        : 'metric';
       if (previousTrack?.name || previousTrack?.artists) {
         body.previousTrack = { name: previousTrack.name, artist: previousTrack.artists };
       }
@@ -186,31 +201,32 @@ function App() {
         body.nextTrack = { name: nextTrack.name, artist: nextTrack.artists };
       }
       body.hostPersonality = activePersonalityRef.current;
-      const res = await fetch(`${SERVER_BASE}/api/radio/host-blurb`, {
+      const data = await apiRequest('/api/radio/host-blurb', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) return;
-      const data = await res.json();
       if (requestId !== blurbRequestIdRef.current) return;
       blurbText = data?.text ?? null;
-      setHostBlurb(blurbText);
+      setHostBlurbState({ sessionKey, text: blurbText });
       if (Array.isArray(data?.articles) && data.articles.length > 0) {
-        setHostArticles((prev) => [...data.articles, ...prev].slice(0, 30));
+        setHostArticlesState((previous) => ({
+          sessionKey,
+          articles: [
+            ...data.articles,
+            ...(previous.sessionKey === sessionKey ? previous.articles : []),
+          ].slice(0, 30),
+        }));
       }
     } catch {
       // blurb is optional — swallow errors silently
     } finally {
       resolveBlurb(blurbText);
       if (requestId === blurbRequestIdRef.current) {
-        setIsBlurbLoading(false);
+        setBlurbLoadingSessionKey(null);
       }
     }
-  }, [accessToken]);
+  }, [sessionKey]);
 
   const handleTrackChangeWithBlurb = useCallback((track) => {
     const prevTrack = selectedTrack;
@@ -239,7 +255,7 @@ function App() {
     <div>
       <header className="user-header" aria-live="polite">
         <div className="user-header-left">
-          {accessToken ? (
+          {isAuthenticated ? (
             <section className="user-info-section" aria-label="User information">
               {userProfile?.profileImage ? (
                 <img
@@ -319,7 +335,7 @@ function App() {
                 />
               </div>
 
-              <TopicsDropdown accessToken={accessToken} />
+              <TopicsDropdown sessionKey={sessionKey} />
               <VoiceSelector
                 activeVoiceName={activeVoiceName}
                 onSelectVoice={setActiveVoice}
@@ -343,13 +359,15 @@ function App() {
         </div>
 
         <div className="user-header-right">
-          {accessToken ? (
+          {isAuthenticated ? (
             <div className="header-search-slot">
               <Search
                 onResultsChange={setSearchResults}
                 onManualSearchStart={handleManualSearchStart}
-                accessToken={accessToken}
               />
+              <button type="button" className="profile-edit-trigger" onClick={handleLogout}>
+                Log out
+              </button>
             </div>
           ) : (
             <div className="header-search-placeholder" aria-hidden="true" />
@@ -357,8 +375,17 @@ function App() {
         </div>
       </header>
 
-      {!accessToken ? (
+      {isAuthenticated && authError ? (
+        <p className="auth-error" role="alert">{authError}</p>
+      ) : null}
+
+      {isAuthLoading ? (
+        <div className="login-section" role="status">
+          <p>Checking your Spotify session...</p>
+        </div>
+      ) : !isAuthenticated ? (
         <div className="login-section">
+          {authError ? <p role="alert">{authError}</p> : null}
           <p>Log in with Spotify to start listening.</p>
           <button type="button" className="login-button" onClick={handleLogin}>
             Login with Spotify
@@ -367,7 +394,8 @@ function App() {
       ) : (
         <>
           <SpotifyPlayer
-            accessToken={accessToken}
+            isAuthenticated={isAuthenticated}
+            getSpotifyAccessToken={getSpotifyAccessToken}
             onReady={handleDeviceReady}
             queuedTrack={queuedTrack}
             isQueueLoading={isQueueLoading}

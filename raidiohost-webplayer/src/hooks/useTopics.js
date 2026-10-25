@@ -1,41 +1,44 @@
-import { useCallback, useEffect, useState } from "react";
-import { SERVER_BASE } from "../utils/constants";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { apiRequest } from "../api/client";
 
-export function useTopics(accessToken) {
+const EMPTY_TOPIC_IDS = new Set();
+
+export function useTopics(sessionKey) {
   const [allTopics, setAllTopics] = useState([]);
   const [subscribedIds, setSubscribedIds] = useState(new Set());
-  const [loadedToken, setLoadedToken] = useState(null);
+  const [loadedSessionKey, setLoadedSessionKey] = useState(null);
   const [togglingIds, setTogglingIds] = useState(new Set());
+  const requestedSessionKeyRef = useRef(null);
 
   const fetchTopics = useCallback(async () => {
-    if (!accessToken) return;
+    if (!sessionKey) {
+      requestedSessionKeyRef.current = null;
+      return;
+    }
+    requestedSessionKeyRef.current = sessionKey;
     try {
-      const headers = { Authorization: `Bearer ${accessToken}` };
-      const [allRes, myRes] = await Promise.all([
-        fetch(`${SERVER_BASE}/api/radio/topics`, { headers }),
-        fetch(`${SERVER_BASE}/api/radio/my-topics`, { headers }),
+      const [allData, myData] = await Promise.all([
+        apiRequest('/api/radio/topics'),
+        apiRequest('/api/radio/my-topics'),
       ]);
 
-      if (allRes.ok) {
-        const data = await allRes.json();
-        setAllTopics(data.topics ?? []);
-      }
+      if (requestedSessionKeyRef.current !== sessionKey) return;
 
-      if (myRes.ok) {
-        const data = await myRes.json();
-        const ids = new Set(
-          (data.topics ?? [])
-            .filter((t) => t.enabled && t.topicId)
-            .map((t) => t.topicId._id ?? t.topicId),
-        );
-        setSubscribedIds(ids);
-      }
+      setAllTopics(allData?.topics ?? []);
+      const ids = new Set(
+        (myData?.topics ?? [])
+          .filter((t) => t.enabled && t.topicId)
+          .map((t) => t.topicId._id ?? t.topicId),
+      );
+      setSubscribedIds(ids);
     } catch {
       // silent — topics are optional enrichment
     } finally {
-      setLoadedToken(accessToken);
+      if (requestedSessionKeyRef.current === sessionKey) {
+        setLoadedSessionKey(sessionKey);
+      }
     }
-  }, [accessToken]);
+  }, [sessionKey]);
 
   useEffect(() => {
     queueMicrotask(fetchTopics);
@@ -45,28 +48,23 @@ export function useTopics(accessToken) {
     async (topicId, isCurrentlySubscribed) => {
       setTogglingIds((prev) => new Set([...prev, topicId]));
       try {
-        const res = await fetch(`${SERVER_BASE}/api/radio/my-topics/${topicId}`, {
+        await apiRequest(`/api/radio/my-topics/${topicId}`, {
           method: isCurrentlySubscribed ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           ...(!isCurrentlySubscribed
             ? { body: JSON.stringify({ preferredTone: "casual" }) }
             : {}),
         });
 
-        if (res.ok) {
-          setSubscribedIds((prev) => {
-            const next = new Set(prev);
-            if (isCurrentlySubscribed) {
-              next.delete(topicId);
-            } else {
-              next.add(topicId);
-            }
-            return next;
-          });
-        }
+        setSubscribedIds((prev) => {
+          const next = new Set(prev);
+          if (isCurrentlySubscribed) {
+            next.delete(topicId);
+          } else {
+            next.add(topicId);
+          }
+          return next;
+        });
       } catch {
         // silent
       } finally {
@@ -77,10 +75,16 @@ export function useTopics(accessToken) {
         });
       }
     },
-    [accessToken],
+    [],
   );
 
-  const isLoading = Boolean(accessToken && loadedToken !== accessToken);
+  const isLoading = Boolean(sessionKey && loadedSessionKey !== sessionKey);
 
-  return { allTopics, subscribedIds, isLoading, togglingIds, toggleTopic };
+  return {
+    allTopics: sessionKey === loadedSessionKey ? allTopics : [],
+    subscribedIds: sessionKey === loadedSessionKey ? subscribedIds : EMPTY_TOPIC_IDS,
+    isLoading,
+    togglingIds,
+    toggleTopic,
+  };
 }

@@ -1,99 +1,100 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { SERVER_BASE } from "../utils/constants";
-import { getStoredRefreshToken, loadAuthTokens, saveAuthTokens } from "../utils/authStorage";
+import { useCallback, useEffect, useState } from 'react'
+import { apiRequest, subscribeToUnauthorized } from '../api/client'
+import { LEGACY_AUTH_STORAGE_KEY, SERVER_BASE } from '../utils/constants'
+import { clearLegacyBrowserState } from '../utils/userStorage'
 
 export function useAuth() {
-  const [accessToken, setAccessToken] = useState(() => {
-    if (typeof window === "undefined") return null;
-    return loadAuthTokens()?.accessToken ?? null;
-  });
+  const [authStatus, setAuthStatus] = useState('loading')
+  const [user, setUser] = useState(null)
+  const [authError, setAuthError] = useState('')
 
-  const refreshTimerRef = useRef(null);
+  useEffect(() => {
+    let ignore = false
+    window.sessionStorage.removeItem(LEGACY_AUTH_STORAGE_KEY)
+    clearLegacyBrowserState()
 
-  const scheduleTokenRefresh = useCallback(function schedule(expiresAt) {
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    const delay = expiresAt - Date.now() - 60_000;
-    if (delay <= 0) return;
-    refreshTimerRef.current = setTimeout(async () => {
-      const storedRefreshToken = getStoredRefreshToken();
-      if (!storedRefreshToken) {
-        setAccessToken(null);
-        return;
+    const unsubscribe = subscribeToUnauthorized((error) => {
+      if (ignore) return
+      setUser(null)
+      setAuthStatus('anonymous')
+      setAuthError(error.code === 'reauth_required'
+        ? 'Spotify authorization is required'
+        : 'Your session expired. Sign in again.')
+    })
+
+    apiRequest('/auth/session')
+      .then((data) => {
+        if (ignore) return
+        setUser(data.user)
+        setAuthStatus('authenticated')
+        setAuthError('')
+      })
+      .catch((error) => {
+        if (ignore) return
+        setUser(null)
+        if (error.status === 401) {
+          setAuthStatus('anonymous')
+          setAuthError('')
+          return
+        }
+        setAuthStatus('error')
+        setAuthError('Unable to verify your session. Check your connection and try again.')
+      })
+
+    return () => {
+      ignore = true
+      unsubscribe()
+    }
+  }, [])
+
+  const getSpotifyAccessToken = useCallback(async () => {
+    try {
+      const data = await apiRequest('/auth/spotify-token')
+      if (typeof data?.accessToken !== 'string' || !data.accessToken) {
+        throw new Error('Spotify token response is invalid')
       }
-      try {
-        const res = await fetch(`${SERVER_BASE}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refreshToken: storedRefreshToken }),
-        });
-        if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
-        const data = await res.json();
-        const ttl = data.expiresIn ?? 3600;
-        saveAuthTokens(data.accessToken, storedRefreshToken, ttl);
-        setAccessToken(data.accessToken);
-        schedule(Date.now() + ttl * 1000);
-      } catch (err) {
-        console.error("Silent token refresh failed:", err);
-        setAccessToken(null);
+      return data.accessToken
+    } catch (error) {
+      if (error.status === 401 || error.code === 'reauth_required') {
+        setUser(null)
+        setAuthStatus('anonymous')
+        setAuthError('Spotify authorization is required')
       }
-    }, delay);
-  }, []);
+      throw error
+    }
+  }, [])
 
   const handleLogin = useCallback(() => {
-    const width = 450;
-    const height = 700;
-    const left = window.screenX + (window.innerWidth - width) / 2;
-    const top = window.screenY + (window.innerHeight - height) / 2;
-    const popup = window.open(
-      `${SERVER_BASE}/auth/login`,
-      "Spotify Login",
-      `width=${width},height=${height},left=${left},top=${top}`
-    );
+    window.location.assign(`${SERVER_BASE}/auth/login`)
+  }, [])
 
-    const checkClosed = setInterval(() => {
-      if (!popup || popup.closed) {
-        clearInterval(checkClosed);
-        fetch(`${SERVER_BASE}/auth/token`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.accessToken) {
-              const ttl = data.expiresIn ?? 3600;
-              saveAuthTokens(data.accessToken, data.refreshToken ?? "", ttl);
-              setAccessToken(data.accessToken);
-              scheduleTokenRefresh(Date.now() + ttl * 1000);
-            }
-          })
-          .catch((err) => console.error("Failed to fetch token:", err));
+  const handleLogout = useCallback(async () => {
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' })
+      setUser(null)
+      setAuthStatus('anonymous')
+      setAuthError('')
+      return true
+    } catch (error) {
+      if (error?.status === 401) {
+        setUser(null)
+        setAuthStatus('anonymous')
+        setAuthError('')
+        return true
       }
-    }, 500);
-  }, [scheduleTokenRefresh]);
-
-  // On mount, rehydrate the refresh timer if we already have a valid stored token.
-  useEffect(() => {
-    const stored = loadAuthTokens();
-    if (stored?.expiresAt) {
-      scheduleTokenRefresh(stored.expiresAt);
+      setAuthError('Unable to log out. Check your connection and try again.')
+      return false
     }
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
-  }, [scheduleTokenRefresh]);
+  }, [])
 
-  useEffect(() => {
-    const onMessage = (event) => {
-      if (event.data?.accessToken) {
-        const { accessToken: token, refreshToken, expiresIn } = event.data;
-        const ttl = expiresIn ?? 3600;
-        saveAuthTokens(token, refreshToken ?? "", ttl);
-        setAccessToken(token);
-        scheduleTokenRefresh(Date.now() + ttl * 1000);
-      }
-    };
-
-    console.log("Adding message event listener for auth response");
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [scheduleTokenRefresh]);
-
-  return { accessToken, setAccessToken, handleLogin };
+  return {
+    authError,
+    authStatus,
+    getSpotifyAccessToken,
+    handleLogin,
+    handleLogout,
+    isAuthenticated: authStatus === 'authenticated',
+    isAuthLoading: authStatus === 'loading',
+    user,
+  }
 }

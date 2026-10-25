@@ -13,13 +13,13 @@ const CATEGORY_LABELS = {
   custom: "Custom",
 };
 
-export function TopicsDropdown({ accessToken }) {
+export function TopicsDropdown({ sessionKey }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef(null);
   const searchRef = useRef(null);
   const { allTopics, subscribedIds, isLoading, togglingIds, toggleTopic } =
-    useTopics(accessToken);
+    useTopics(sessionKey);
 
   const sortedTopics = useMemo(() => {
     const subscribed = allTopics.filter((t) => subscribedIds.has(t._id));

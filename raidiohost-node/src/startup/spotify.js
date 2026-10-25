@@ -3,7 +3,11 @@ const SpotifyWebApi = require('spotify-web-api-node');
 let spotifyConfig;
 
 function initialize(config) {
-    spotifyConfig = { ...config };
+    spotifyConfig = {
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        redirectUri: config.redirectUri,
+    };
 }
 
 function createClient() {

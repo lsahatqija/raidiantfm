@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SERVER_BASE } from "../utils/constants";
+import { apiRequest } from "../api/client";
 
-export function useSearch(accessToken) {
+export function useSearch(sessionKey) {
   const [searchResults, setSearchResults] = useState([]);
-  const [hasManualSearch, setHasManualSearch] = useState(false);
+  const [manualSearchSessionKey, setManualSearchSessionKey] = useState(null);
+  const [resultsSessionKey, setResultsSessionKey] = useState(null);
   const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
   const [suggestionsKey, setSuggestionsKey] = useState(0);
   const resultsRef = useRef(null);
+  const hasManualSearch = Boolean(sessionKey && manualSearchSessionKey === sessionKey);
 
   useEffect(() => {
-    if (!accessToken || hasManualSearch) {
+    if (!sessionKey) {
+      return undefined;
+    }
+
+    if (hasManualSearch) {
       return undefined;
     }
 
@@ -18,12 +24,10 @@ export function useSearch(accessToken) {
     const loadSuggestions = async () => {
       setIsSuggestionsLoading(true);
       try {
-        const res = await fetch(`${SERVER_BASE}/api/suggestions`, {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-        });
-        const data = await res.json();
+        const data = await apiRequest('/api/suggestions');
         if (!ignore) {
           setSearchResults(Array.isArray(data?.tracks) ? data.tracks : []);
+          setResultsSessionKey(sessionKey);
         }
       } catch (err) {
         console.error("Failed to load suggestions:", err);
@@ -42,17 +46,23 @@ export function useSearch(accessToken) {
     return () => {
       ignore = true;
     };
-  }, [accessToken, hasManualSearch, suggestionsKey]);
+  }, [sessionKey, hasManualSearch, suggestionsKey]);
 
   const handleManualSearchStart = useCallback(() => {
-    setHasManualSearch(true);
+    setManualSearchSessionKey(sessionKey);
+    setResultsSessionKey(sessionKey);
     setSearchResults([]);
-  }, []);
+  }, [sessionKey]);
 
   const refreshSuggestions = useCallback(() => {
-    setHasManualSearch(false);
+    setManualSearchSessionKey(null);
     setSuggestionsKey((k) => k + 1);
   }, []);
+
+  const setScopedSearchResults = useCallback((results) => {
+    setResultsSessionKey(sessionKey);
+    setSearchResults(results);
+  }, [sessionKey]);
 
   const scrollResults = useCallback((direction) => {
     if (!resultsRef.current) return;
@@ -63,8 +73,8 @@ export function useSearch(accessToken) {
   }, []);
 
   return {
-    searchResults,
-    setSearchResults,
+    searchResults: sessionKey === resultsSessionKey ? searchResults : [],
+    setSearchResults: setScopedSearchResults,
     hasManualSearch,
     isSuggestionsLoading,
     resultsRef,
