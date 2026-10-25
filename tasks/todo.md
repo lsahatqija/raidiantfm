@@ -310,16 +310,18 @@ verified registry signatures for all installed packages.
 
 ## Phase 4: PWA shell
 
-**Status (2026-10-25):** Not started. Tasks 18-21 and Checkpoint E remain.
+**Status (2026-10-25):** In progress on `feature/phase-4-pwa-shell`.
+Task 18 is implemented and locally verified; Task 19 is the active implementation
+slice. Tasks 20-21 and Checkpoint E remain.
 
 ### Task 18: Add manifest, icons, and platform metadata
 
 **Description:** Create the web app manifest and complete icon/theme metadata without overwriting the existing unrelated title edit.
 
 **Acceptance criteria:**
-- [ ] Manifest has name/short name, start URL, scope, standalone display, theme/background colors, 192/512 and maskable icons, description, and optional shortcuts.
-- [ ] Apple touch icon/status-bar metadata and safe favicon fallbacks are present.
-- [ ] Icons are visually verified at device sizes and maskable safe zones.
+- [x] Manifest has name/short name, start URL, scope, standalone display, theme/background colors, 192/512 and maskable icons, description, and optional shortcuts.
+- [x] Apple touch icon/status-bar metadata and safe favicon fallbacks are present.
+- [x] Icons are visually verified at device sizes and maskable safe zones.
 
 **Verification:** Browser installability inspection and manifest/icon automated checks pass.
 
