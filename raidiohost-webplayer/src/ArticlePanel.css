@@ -50,9 +50,9 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: 320px;
-  height: 100vh;
-  max-height: 100vh;
+  width: min(320px, 100vw);
+  height: 100dvh;
+  max-height: 100dvh;
   z-index: 1000;
   display: flex;
   flex-direction: column;

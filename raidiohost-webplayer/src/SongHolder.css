@@ -81,7 +81,7 @@
 }
 
 .song-results::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+  background: var(--accent-control);
 }
 
 .song-holder {
@@ -117,7 +117,7 @@
   z-index: 1;
   padding: 5px 8px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-control);
   color: white;
   font-size: 10px;
   font-weight: 700;
@@ -181,7 +181,7 @@
   padding: 0;
   display: grid;
   place-items: center;
-  background: var(--accent);
+  background: var(--accent-control);
   color: white;
   cursor: pointer;
   transition: opacity 0.2s ease, transform 0.15s ease;
@@ -212,7 +212,7 @@
   padding: 0;
   display: grid;
   place-items: center;
-  background: var(--accent);
+  background: var(--accent-control);
   color: white;
   font-size: 22px;
   line-height: 1;
@@ -332,7 +332,7 @@
   border: none;
   border-radius: 999px;
   padding: 10px 16px;
-  background: var(--accent);
+  background: var(--accent-control);
   color: white;
   font-weight: 700;
   cursor: pointer;

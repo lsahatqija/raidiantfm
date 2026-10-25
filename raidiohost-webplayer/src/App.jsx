@@ -18,6 +18,7 @@ import { ArticlePanel } from "./ArticlePanel";
 import { apiRequest } from "./api/client";
 import { getUserStorage } from "./utils/userStorage";
 import { PrivacyControls } from "./PrivacyControls";
+import { PwaStatus } from "./pwa/PwaStatus";
 
 function shuffleItems(items) {
   const nextItems = [...items];
@@ -256,6 +257,7 @@ function App() {
 
   return (
     <div>
+      <PwaStatus />
       <header className="user-header" aria-live="polite">
         <div className="user-header-left">
           {isAuthenticated ? (
@@ -359,7 +361,9 @@ function App() {
         </div>
 
         <div className="user-header-center">
-          <img className="header-minimal-logo" src="/logos/logo_text.png" alt="RaidiantFM logo" />
+          <h1 className="header-logo-heading">
+            <img className="header-minimal-logo" src="/logos/logo_text.png" alt="RaidiantFM" />
+          </h1>
         </div>
 
         <div className="user-header-right">
@@ -425,7 +429,7 @@ function App() {
 
           <div className="playlist-section-shell">
             <div className="playlist-section-header">
-              <p className="playlist-section-title">Your Playlists</p>
+              <h2 className="playlist-section-title">Your Playlists</h2>
               <div className="playlist-section-controls">
                 <button
                   className="carousel-button carousel-button--refresh"
@@ -484,9 +488,9 @@ function App() {
 
           <div className="song-results-shell">
             <div className="song-results-header">
-              <p className="song-results-title">
+              <h2 className="song-results-title">
                 {hasManualSearch ? "Search Results" : "Recommended for You"}
-              </p>
+              </h2>
               <div className="song-results-controls">
                 <button
                   className="carousel-button carousel-button--refresh"
@@ -537,9 +541,9 @@ function App() {
         </>
       )}
       
-      <h1 className="app-logo-heading">
-        <img className="app-logo-full" src="/logos/logo_full.png" alt="RaidiantFM" />
-      </h1>
+      <div className="app-logo-heading" aria-hidden="true">
+        <img className="app-logo-full" src="/logos/logo_full.png" alt="" />
+      </div>
 
       <ArticlePanel
         articles={hostArticles}

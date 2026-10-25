@@ -22,7 +22,6 @@
 
 .location-city--empty {
   color: var(--text);
-  opacity: 0.45;
 }
 
 .location-edit-trigger {

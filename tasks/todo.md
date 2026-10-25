@@ -310,16 +310,20 @@ verified registry signatures for all installed packages.
 
 ## Phase 4: PWA shell
 
-**Status (2026-10-25):** Not started. Tasks 18-21 and Checkpoint E remain.
+**Status (2026-10-25):** Implementation complete on
+`feature/phase-4-pwa-shell`. Tasks 18-21 are implemented and pass
+the local automated Phase 4 gate. Checkpoint E's production HTTPS/header check
+and the recorded iOS/Android smoke matrix remain external deployment checks; see
+`tasks/phase-4-operations.md`.
 
 ### Task 18: Add manifest, icons, and platform metadata
 
 **Description:** Create the web app manifest and complete icon/theme metadata without overwriting the existing unrelated title edit.
 
 **Acceptance criteria:**
-- [ ] Manifest has name/short name, start URL, scope, standalone display, theme/background colors, 192/512 and maskable icons, description, and optional shortcuts.
-- [ ] Apple touch icon/status-bar metadata and safe favicon fallbacks are present.
-- [ ] Icons are visually verified at device sizes and maskable safe zones.
+- [x] Manifest has name/short name, start URL, scope, standalone display, theme/background colors, 192/512 and maskable icons, description, and optional shortcuts.
+- [x] Apple touch icon/status-bar metadata and safe favicon fallbacks are present.
+- [x] Icons are visually verified at device sizes and maskable safe zones.
 
 **Verification:** Browser installability inspection and manifest/icon automated checks pass.
 
@@ -330,9 +334,9 @@ verified registry signatures for all installed packages.
 **Description:** Implement versioned shell precaching, navigation fallback, explicit network-only private routes, and cache cleanup.
 
 **Acceptance criteria:**
-- [ ] Cold offline launch renders a useful offline shell and cached local assets.
-- [ ] Auth, Spotify, user, playlist, private topic, playback, and mutation responses never enter Cache Storage.
-- [ ] Old cache versions are removed without deleting unrelated origin storage.
+- [x] Cold offline launch renders a useful offline shell and cached local assets.
+- [x] Auth, Spotify, user, playlist, private topic, playback, and mutation responses never enter Cache Storage.
+- [x] Old cache versions are removed without deleting unrelated origin storage.
 
 **Verification:** Browser tests inspect caches online/offline and assert private response exclusion.
 
@@ -343,9 +347,9 @@ verified registry signatures for all installed packages.
 **Description:** Expose platform-appropriate install guidance and clear lifecycle states without interrupting active playback.
 
 **Acceptance criteria:**
-- [ ] Chromium install prompt, iOS Add to Home Screen guidance, offline state, update-ready prompt, and reauth state are accessible.
-- [ ] Updates do not force-reload during playback without user consent.
-- [ ] Unsupported install APIs degrade silently and accurately.
+- [x] Chromium install prompt, iOS Add to Home Screen guidance, offline state, update-ready prompt, and reauth state are accessible.
+- [x] Updates do not force-reload during playback without user consent.
+- [x] Unsupported install APIs degrade silently and accurately.
 
 **Verification:** Component tests plus Chromium PWA E2E and manual iOS flow pass.
 
@@ -356,9 +360,9 @@ verified registry signatures for all installed packages.
 **Description:** Test and correct compact layouts, safe areas, touch targets, focus, drawers/dropdowns, and dynamic viewport behavior.
 
 **Acceptance criteria:**
-- [ ] Core flows work at 320, 768, 1024, and 1440 px with no clipped primary controls.
-- [ ] Standalone mode respects notches/safe areas and mobile virtual keyboards.
-- [ ] Keyboard/screen-reader paths and loading/empty/error states meet WCAG 2.1 AA expectations.
+- [x] Core flows work at 320, 768, 1024, and 1440 px with no clipped primary controls.
+- [x] Standalone mode respects notches/safe areas and mobile virtual keyboards.
+- [x] Keyboard/screen-reader paths and loading/empty/error states meet WCAG 2.1 AA expectations.
 
 **Verification:** Responsive screenshots, keyboard pass, automated accessibility scan, and real-device smoke test.
 
@@ -366,7 +370,7 @@ verified registry signatures for all installed packages.
 
 ## Checkpoint E
 
-- [ ] Installability, offline/privacy cache, update, responsive, and accessibility checks pass.
+- [x] Installability, offline/privacy cache, update, responsive, and accessibility checks pass.
 - [ ] PWA is served over production HTTPS with correct HTML/service-worker/asset cache headers.
 
 ## Phase 5: OS media integration

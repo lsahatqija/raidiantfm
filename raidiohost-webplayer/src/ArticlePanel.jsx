@@ -27,6 +27,7 @@ export function ArticlePanel({ articles = [], isOpen, onToggle }) {
       <aside
         className={`article-panel${isOpen ? ' article-panel--open' : ''}`}
         aria-label="Article sources"
+        aria-hidden={!isOpen}
         inert={!isOpen}
       >
         <div className="article-panel-header">
