@@ -311,8 +311,8 @@ verified registry signatures for all installed packages.
 ## Phase 4: PWA shell
 
 **Status (2026-10-25):** In progress on `feature/phase-4-pwa-shell`.
-Tasks 18-19 are implemented and locally verified; Task 20 is the active
-implementation slice. Task 21 and Checkpoint E remain.
+Tasks 18-20 are implemented and locally verified; Task 21 is the active
+implementation slice. Checkpoint E remains.
 
 ### Task 18: Add manifest, icons, and platform metadata
 
@@ -345,9 +345,9 @@ implementation slice. Task 21 and Checkpoint E remain.
 **Description:** Expose platform-appropriate install guidance and clear lifecycle states without interrupting active playback.
 
 **Acceptance criteria:**
-- [ ] Chromium install prompt, iOS Add to Home Screen guidance, offline state, update-ready prompt, and reauth state are accessible.
-- [ ] Updates do not force-reload during playback without user consent.
-- [ ] Unsupported install APIs degrade silently and accurately.
+- [x] Chromium install prompt, iOS Add to Home Screen guidance, offline state, update-ready prompt, and reauth state are accessible.
+- [x] Updates do not force-reload during playback without user consent.
+- [x] Unsupported install APIs degrade silently and accurately.
 
 **Verification:** Component tests plus Chromium PWA E2E and manual iOS flow pass.
 

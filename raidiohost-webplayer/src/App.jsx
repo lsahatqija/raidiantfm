@@ -18,6 +18,7 @@ import { ArticlePanel } from "./ArticlePanel";
 import { apiRequest } from "./api/client";
 import { getUserStorage } from "./utils/userStorage";
 import { PrivacyControls } from "./PrivacyControls";
+import { PwaStatus } from "./pwa/PwaStatus";
 
 function shuffleItems(items) {
   const nextItems = [...items];
@@ -256,6 +257,7 @@ function App() {
 
   return (
     <div>
+      <PwaStatus />
       <header className="user-header" aria-live="polite">
         <div className="user-header-left">
           {isAuthenticated ? (
