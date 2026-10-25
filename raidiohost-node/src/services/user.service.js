@@ -1,6 +1,8 @@
 const crypto = require('node:crypto');
 const User = require('../models/user.model');
 const Topic = require('../models/topic.model');
+const Session = require('../models/session.model');
+const RefreshLease = require('../models/refresh-lease.model');
 const { createTokenCipher } = require('./token-crypto.service');
 
 let tokenCipher;
@@ -45,7 +47,7 @@ function decryptSpotifyCredentials(user) {
 /**
  * Create or update the user document for a Spotify account.
  *
- * Spotify profile fields (spotifyDisplayName, spotifyEmail, tokens) are
+ * Required Spotify profile fields (display name and tokens) are
  * always overwritten so they stay in sync with Spotify.
  * `username` is only set on document creation — once a user customises it,
  * subsequent logins will not revert it to the Spotify display name.
@@ -55,12 +57,11 @@ function decryptSpotifyCredentials(user) {
  * @returns {Promise<import('../models/user.model')>}
  */
 async function upsertUser(spotifyProfile, tokens) {
-    const { id: spotifyId, display_name: spotifyDisplayName = '', email: spotifyEmail = '' } = spotifyProfile;
+    const { id: spotifyId, display_name: spotifyDisplayName = '' } = spotifyProfile;
 
     // Always sync read-only Spotify fields and encrypted token data.
     const alwaysSet = {
         spotifyDisplayName,
-        spotifyEmail,
         spotifyCredentials: encryptSpotifyCredentials(tokens),
     };
 
@@ -78,6 +79,9 @@ async function upsertUser(spotifyProfile, tokens) {
                 accessToken: 1,
                 refreshToken: 1,
                 tokenExpiresAt: 1,
+                spotifyEmail: 1,
+                'location.latitude': 1,
+                'location.longitude': 1,
             },
         },
         { upsert: true, new: true, runValidators: true }
@@ -212,7 +216,7 @@ async function updateAccessToken(spotifyId, tokenData) {
 /**
  * Update the user's geographic location.
  * @param {string} spotifyId
- * @param {{ city: string, latitude: number, longitude: number }} locationData
+ * @param {{ city: string }} locationData
  * @returns {Promise<import('../models/user.model') | null>}
  */
 async function updateLocation(spotifyId, locationData) {
@@ -221,9 +225,9 @@ async function updateLocation(spotifyId, locationData) {
         {
             $set: {
                 'location.city': locationData.city,
-                'location.latitude': locationData.latitude,
-                'location.longitude': locationData.longitude,
+                'location.consentAt': new Date(),
             },
+            $unset: { 'location.latitude': 1, 'location.longitude': 1 },
         },
         { new: true, runValidators: true }
     );
@@ -235,12 +239,74 @@ async function updateLocationById(userId, locationData) {
         {
             $set: {
                 'location.city': locationData.city,
-                'location.latitude': locationData.latitude,
-                'location.longitude': locationData.longitude,
+                'location.consentAt': new Date(),
             },
+            $unset: { 'location.latitude': 1, 'location.longitude': 1 },
         },
         { new: true, runValidators: true },
     );
+}
+
+async function clearLocationById(userId) {
+    return User.findByIdAndUpdate(userId, {
+        $set: { 'location.city': '', 'location.consentAt': null },
+        $unset: { 'location.latitude': 1, 'location.longitude': 1 },
+    }, { new: true, runValidators: true });
+}
+
+async function exportAccountById(userId) {
+    const [user, privateTopics] = await Promise.all([
+        User.findById(userId).select('-spotifyCredentials').lean(),
+        Topic.find({ createdBy: userId }).select('name slug description category sources createdAt updatedAt').lean(),
+    ]);
+    if (!user) return null;
+
+    return {
+        exportedAt: new Date().toISOString(),
+        profile: {
+            spotifyId: user.spotifyId,
+            username: user.username,
+            spotifyDisplayName: user.spotifyDisplayName,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+        },
+        location: {
+            city: user.location?.city || '',
+            consentAt: user.location?.consentAt || null,
+        },
+        preferences: { lastVolume: user.lastVolume ?? 0.5 },
+        subscriptions: (user.topics || []).map((entry) => ({
+            topicId: entry.topicId?.toString(),
+            enabled: entry.enabled,
+            priority: entry.priority,
+            preferredTone: entry.preferredTone,
+            lastServedAt: entry.lastServedAt || null,
+        })),
+        privateTopics,
+    };
+}
+
+async function deleteAccountById(userId) {
+    const ownedTopics = await Topic.find({ createdBy: userId }).select('_id').lean();
+    const ownedTopicIds = ownedTopics.map(({ _id }) => _id);
+    await Promise.all([
+        Session.deleteMany({ userId }),
+        RefreshLease.deleteMany({ userId }),
+        ownedTopicIds.length ? User.updateMany({}, { $pull: { topics: { topicId: { $in: ownedTopicIds } } } }) : null,
+    ]);
+    await Topic.deleteMany({ createdBy: userId });
+    const result = await User.deleteOne({ _id: userId });
+    return result.deletedCount === 1;
+}
+
+async function purgeDeprecatedPersonalData() {
+    return User.updateMany({}, {
+        $unset: {
+            spotifyEmail: 1,
+            'location.latitude': 1,
+            'location.longitude': 1,
+        },
+    });
 }
 
 module.exports = {
@@ -258,4 +324,8 @@ module.exports = {
     findByRefreshToken,
     updateLocation,
     updateLocationById,
+    clearLocationById,
+    exportAccountById,
+    deleteAccountById,
+    purgeDeprecatedPersonalData,
 };

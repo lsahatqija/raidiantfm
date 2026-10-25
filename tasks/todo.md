@@ -230,14 +230,23 @@ sandbox smoke procedure is documented for deployment owners.
 
 ## Phase 3: Security, privacy, and operations
 
+**Status (2026-10-25):** Tasks 14-17 are complete on `feature/phase-3`.
+Outbound RSS/weather/geocoding requests are destination-pinned and bounded,
+request inputs and shared Mongo-backed abuse limits are enforced, location is
+explicitly opt-in and city-only, account export/deletion covers server and
+browser-held state, and production logging/readiness/shutdown/CI gates are in
+place. The workspace gate passes with 86 backend tests, 24 frontend tests, the
+production build, Chromium E2E, a zero-vulnerability production audit, and
+verified registry signatures for all installed packages.
+
 ### Task 14: Harden RSS and outbound requests
 
 **Description:** Protect custom RSS and other backend fetches from SSRF, hangs, oversized responses, and unsafe redirects.
 
 **Acceptance criteria:**
-- [ ] Private/reserved IPv4/IPv6 destinations and unsafe redirects are rejected after DNS resolution.
-- [ ] Allowlisted protocols/content types, response byte cap, connect/read timeout, and concurrency cap are enforced.
-- [ ] Rebinding and redirect abuse cases have tests.
+- [x] Private/reserved IPv4/IPv6 destinations and unsafe redirects are rejected after DNS resolution.
+- [x] Allowlisted protocols/content types, response byte cap, connect/read timeout, and concurrency cap are enforced.
+- [x] Rebinding and redirect abuse cases have tests.
 
 **Verification:** SSRF test corpus covers loopback, RFC1918, link-local/cloud metadata, IPv6, redirects, DNS changes, timeout, and oversize feeds.
 
@@ -248,9 +257,9 @@ sandbox smoke procedure is documented for deployment owners.
 **Description:** Normalize request schemas/errors and make CORS, trusted proxies, cookies, and shared rate limits explicit.
 
 **Acceptance criteria:**
-- [ ] Every external input has size/type/range validation and stable 4xx errors.
-- [ ] Auth and expensive external-fetch routes use a shared-store limiter for multi-instance deployments.
-- [ ] Production CORS/proxy configuration is allowlisted and covered by tests.
+- [x] Every external input has size/type/range validation and stable 4xx errors.
+- [x] Auth and expensive external-fetch routes use a shared-store limiter for multi-instance deployments.
+- [x] Production CORS/proxy configuration is allowlisted and covered by tests.
 
 **Verification:** Boundary/abuse tests and response-header checks pass behind the intended proxy topology.
 
@@ -261,9 +270,9 @@ sandbox smoke procedure is documented for deployment owners.
 **Description:** Minimize Spotify/location data and add explicit consent, retention, export, and deletion behavior.
 
 **Acceptance criteria:**
-- [ ] Each stored personal field has a purpose and retention rule; unnecessary email/precise coordinates are removed or justified.
-- [ ] IP geolocation is HTTPS, deployment-safe, and opt-in—or removed in favor of user selection.
-- [ ] Account export/delete removes sessions, encrypted tokens, preferences, private topics, and downstream copies.
+- [x] Each stored personal field has a purpose and retention rule; unnecessary email/precise coordinates are removed or justified.
+- [x] IP geolocation is HTTPS, deployment-safe, and opt-in—or removed in favor of user selection.
+- [x] Account export/delete removes sessions, encrypted tokens, preferences, private topics, and downstream copies.
 
 **Verification:** Privacy integration tests exercise consent, export, delete, and post-delete authentication failure.
 
@@ -274,9 +283,9 @@ sandbox smoke procedure is documented for deployment owners.
 **Description:** Add redacted structured logs, request IDs, health/readiness, graceful shutdown, reproducible builds, audits, and CI.
 
 **Acceptance criteria:**
-- [ ] Auth/session/refresh events are diagnosable by opaque identifiers without tokens, email, or coordinates.
-- [ ] CI runs frozen install, lint, tests, build, E2E smoke, and dependency audit.
-- [ ] Containers use `npm ci`; the unnecessary `fs` dependency is removed after lockfile review.
+- [x] Auth/session/refresh events are diagnosable by opaque identifiers without tokens, email, or coordinates.
+- [x] CI runs frozen install, lint, tests, build, E2E smoke, and dependency audit.
+- [x] Containers use `npm ci`; the unnecessary `fs` dependency is removed after lockfile review.
 
 **Verification:** CI passes from clean clones; log-capture tests assert secret redaction; readiness follows Mongo connectivity.
 
@@ -284,9 +293,9 @@ sandbox smoke procedure is documented for deployment owners.
 
 ## Checkpoint D
 
-- [ ] Security abuse suite passes and production topology is documented.
-- [ ] Privacy lifecycle and credential incident actions are complete.
-- [ ] Clean reproducible CI is green.
+- [x] Security abuse suite passes and production topology is documented.
+- [x] Privacy lifecycle and credential incident actions are complete.
+- [x] Clean reproducible CI is green.
 
 ## Phase 4: PWA shell
 

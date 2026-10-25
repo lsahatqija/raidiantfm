@@ -46,7 +46,7 @@ async function getTopics(req, res) {
 
         return res.json({ topics });
     } catch (err) {
-        console.error('Error in getTopics:', err);
+        req.log?.error({ event: 'topics_fetch_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error fetching topics' });
     }
 }
@@ -99,7 +99,7 @@ async function createTopic(req, res) {
 
         return res.status(201).json({ topic });
     } catch (err) {
-        console.error('Error in createTopic:', err);
+        req.log?.error({ event: 'topic_create_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error creating topic' });
     }
 }
@@ -121,7 +121,7 @@ async function getMyTopics(req, res) {
 
         return res.json({ topics: visibleTopics });
     } catch (err) {
-        console.error('Error in getMyTopics:', err);
+        req.log?.error({ event: 'subscriptions_fetch_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error fetching user topics' });
     }
 }
@@ -168,7 +168,7 @@ async function subscribeTopic(req, res) {
 
         return res.json({ topics: user.topics });
     } catch (err) {
-        console.error('Error in subscribeTopic:', err);
+        req.log?.error({ event: 'subscription_create_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error subscribing to topic' });
     }
 }
@@ -197,7 +197,7 @@ async function unsubscribeTopic(req, res) {
 
         return res.json({ success: true });
     } catch (err) {
-        console.error('Error in unsubscribeTopic:', err);
+        req.log?.error({ event: 'subscription_delete_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error unsubscribing from topic' });
     }
 }
@@ -241,7 +241,7 @@ async function getHostBlurb(req, res) {
 
         return res.json(result);
     } catch (err) {
-        console.error('Error in getHostBlurb:', err);
+        req.log?.error({ event: 'host_blurb_failed', errorCode: err.code || err.name });
         return res.status(500).json({ error: 'Error generating radio host blurb' });
     }
 }

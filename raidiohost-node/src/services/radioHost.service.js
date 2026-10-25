@@ -1,7 +1,9 @@
-const https = require('https');
 const User = require('../models/user.model');
 const { fetchRssUrl } = require('./rss.service');
 const { TONE_TEMPLATES } = require('./toneTemplates');
+const { createSafeHttpClient } = require('./outbound-http.service');
+
+const outboundHttp = createSafeHttpClient();
 
 const FALLBACK_TEXT = "No major updates queued right now, so let's keep the playlist rolling.";
 
@@ -63,21 +65,24 @@ function interpolateSources(sources, loc) {
  * @param {'metric'|'imperial'} [units='metric']
  * @returns {Promise<Array<{ title: string, url: string, publishedAt: Date }>>}
  */
-function fetchWttrIn(city, units = 'metric') {
-    return new Promise((resolve) => {
+async function fetchWttrIn(city, units = 'metric') {
+    try {
         const encoded = encodeURIComponent(city);
         const url = `https://wttr.in/${encoded}?format=j1`;
-
-        https.get(url, { headers: { 'User-Agent': 'AIRadioHost/1.0' } }, (res) => {
-            let raw = '';
-            res.on('data', (chunk) => (raw += chunk));
-            res.on('end', () => {
-                try {
-                    const data = JSON.parse(raw);
+        const raw = await outboundHttp.get(url, {
+            allowedProtocols: ['https:'],
+            allowedHosts: ['wttr.in'],
+            allowedContentTypes: ['application/json'],
+            connectTimeoutMs: 3_000,
+            readTimeoutMs: 5_000,
+            maxBytes: 500_000,
+            maxRedirects: 0,
+        });
+        const data = JSON.parse(raw.toString('utf8'));
                     const cur = data.current_condition?.[0];
                     const days = data.weather || [];
                     const today = days[0];
-                    if (!cur) return resolve([]);
+                    if (!cur) return [];
 
                     const selectedUnits = normalizeWeatherUnits(units);
                     const isMetric = selectedUnits === 'metric';
@@ -149,14 +154,10 @@ function fetchWttrIn(city, units = 'metric') {
                         });
                     });
 
-                    resolve(items);
-                } catch {
-                    resolve([]);
-                }
-            });
-            res.on('error', () => resolve([]));
-        }).on('error', () => resolve([]));
-    });
+        return items;
+    } catch {
+        return [];
+    }
 }
 
 /**
@@ -172,7 +173,7 @@ async function fetchTopicItems(topic, userLocation, options = {}) {
 
     const results = await Promise.allSettled(
         resolvedSources.map((url) =>
-            url.includes('wttr.in')
+            new URL(url).hostname === 'wttr.in'
                 ? fetchWttrIn(userLocation.city, weatherUnits)
                 : fetchRssUrl(url)
         )

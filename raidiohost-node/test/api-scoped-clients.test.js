@@ -108,8 +108,8 @@ describe('request-scoped Spotify API routes', () => {
                 .send({ track: { id: 'current-a', uri: 'spotify:track:current-a' } }),
             request(app).post('/api/queue-next').set('Cookie', 'session=user-b')
                 .send({ track: { id: 'current-b', uri: 'spotify:track:current-b' } }),
-            request(app).get('/api/play?uri=spotify:track:play-a').set('Cookie', 'session=user-a'),
-            request(app).get('/api/play?uri=spotify:track:play-b').set('Cookie', 'session=user-b'),
+            request(app).get('/api/play?uri=spotify:track:playA').set('Cookie', 'session=user-a'),
+            request(app).get('/api/play?uri=spotify:track:playB').set('Cookie', 'session=user-b'),
         ]);
 
         expect(userAQueue.body.track.id).toBe('user-a-queued');
@@ -117,8 +117,8 @@ describe('request-scoped Spotify API routes', () => {
         expect(userAPlay.body.ok).toBe(true);
         expect(userBPlay.body.ok).toBe(true);
         expect(playCalls).toEqual(expect.arrayContaining([
-            { userId: 'user-a', uri: 'spotify:track:play-a' },
-            { userId: 'user-b', uri: 'spotify:track:play-b' },
+            { userId: 'user-a', uri: 'spotify:track:playA' },
+            { userId: 'user-b', uri: 'spotify:track:playB' },
         ]));
     });
 });

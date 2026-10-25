@@ -16,6 +16,7 @@ logs/
 *.pid
 *.pid.lock
 npm-debug.log*
+.npm-cache/
 
 # Editor and OS files
 .DS_Store

@@ -25,6 +25,7 @@ describe('loadRuntimeConfig', () => {
             server: {
                 port: 3050,
                 trustProxy: 2,
+                jsonBodyLimit: '16kb',
             },
             database: {
                 uri: 'mongodb://database.example/raidiohost',
@@ -53,6 +54,10 @@ describe('loadRuntimeConfig', () => {
             },
             tokens: {
                 encryptionKey: Buffer.alloc(32, 7),
+            },
+            rateLimits: {
+                auth: { max: 10, windowMs: 900000 },
+                external: { max: 30, windowMs: 60000 },
             },
         });
     });

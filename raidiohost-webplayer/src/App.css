@@ -59,6 +59,36 @@
   gap: 8px;
 }
 
+.privacy-controls {
+  position: relative;
+  font-size: 12px;
+}
+
+.privacy-controls summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.privacy-controls-panel {
+  position: absolute;
+  right: 0;
+  z-index: 220;
+  display: grid;
+  gap: 8px;
+  min-width: 160px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+.privacy-controls-panel button,
+.privacy-controls-panel a {
+  color: var(--text-h);
+  font: inherit;
+}
+
 .header-search-slot .search-form {
   justify-content: flex-end;
   flex-wrap: nowrap;

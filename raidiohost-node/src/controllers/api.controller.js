@@ -3,6 +3,9 @@ const {
     pickRandomTracks,
     findSimilarTrack,
 } = require('./api.functions');
+const { createSafeHttpClient } = require('../services/outbound-http.service');
+
+const outboundHttp = createSafeHttpClient();
 
 function describeSpotifyFailure(error) {
     if (error?.code === 'reauth_required') {
@@ -36,8 +39,9 @@ function describeSpotifyFailure(error) {
     return { status: 502, code: 'spotify_unavailable', message: 'Spotify is temporarily unavailable' };
 }
 
-function logSpotifyFailure(operation, failure) {
-    console.error('Spotify request failed', {
+function logSpotifyFailure(req, operation, failure) {
+    req.log?.warn({
+        event: 'spotify_request_failed',
         operation,
         code: failure.code,
         status: failure.status,
@@ -50,7 +54,7 @@ function respondToSpotifyFailure(res, error, operation) {
     if (failure.status === 429 && Number.isInteger(retryAfter) && retryAfter >= 0) {
         res.set('Retry-After', String(retryAfter));
     }
-    logSpotifyFailure(operation, failure);
+    logSpotifyFailure(res.req, operation, failure);
     return res.status(failure.status).json({
         error: { code: failure.code, message: failure.message },
     });
@@ -67,7 +71,7 @@ async function search(req, res) {
         const limit = req.spotifyContract.clampSearchLimit(req.query.limit || 10);
         const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit }));
         const tracks = data.body.tracks.items.map(mapTrack);
-        console.log('Found tracks:', tracks);
+        req.log?.info({ event: 'spotify_search_completed', resultCount: tracks.length });
         return res.json({ tracks });
     } catch (error) {
         return respondToSpotifyFailure(res, error, 'search');
@@ -80,7 +84,7 @@ async function suggestions(req, res) {
         const topTracks = Array.isArray(data.body?.items) ? data.body.items : [];
         const tracks = pickRandomTracks(topTracks, 5).map(mapTrack);
 
-        console.log('Suggested tracks:', tracks);
+        req.log?.info({ event: 'spotify_suggestions_completed', resultCount: tracks.length });
         return res.json({ tracks });
     } catch (error) {
         return respondToSpotifyFailure(res, error, 'suggestions');
@@ -112,14 +116,14 @@ async function queueNext(req, res) {
         }
 
         const mappedTrack = mapTrack(queuedTrack);
-        console.log('Queued next track:', mappedTrack, 'strategy:', strategy);
+        req.log?.info({ event: 'spotify_queue_completed', strategy });
         return res.json({ track: mappedTrack, genre: matchedGenre, strategy });
     } catch (error) {
         const failure = describeSpotifyFailure(error);
         if (['reauth_required', 'spotify_refresh_unavailable'].includes(failure.code)) {
             return respondToSpotifyFailure(res, error, 'queue-next');
         }
-        logSpotifyFailure('queue-next', failure);
+        logSpotifyFailure(req, 'queue-next', failure);
         return res.json({
             track: null,
             strategy: 'error-non-blocking',
@@ -150,7 +154,8 @@ async function playlists(req, res) {
                     trackCount = req.spotifyContract.getPlaylistItemTotal(details.body) || trackCount;
                 } catch (detailsErr) {
                     const failure = describeSpotifyFailure(detailsErr);
-                    console.warn('Spotify playlist count lookup failed', {
+                    req.log?.warn({
+                        event: 'spotify_playlist_count_failed',
                         code: failure.code,
                         status: failure.status,
                     });
@@ -198,7 +203,7 @@ async function playlistTracks(req, res) {
             .filter((entry) => entry?.item?.uri)
             .map((entry) => mapTrack(entry.item));
 
-        console.log(`Fetched playlist ${id} tracks, offset: ${offset}, returned: ${tracks.length}, total: ${total}`);
+        req.log?.info({ event: 'spotify_playlist_items_completed', resultCount: tracks.length });
 
         return res.json({ tracks, total, limit, offset });
     } catch (error) {
@@ -216,7 +221,7 @@ async function play(req, res) {
 
     try {
         await req.spotify.execute((spotifyApi) => spotifyApi.play(playOptions));
-        console.log('Playing track:', uri);
+        req.log?.info({ event: 'spotify_playback_started' });
         return res.json({ ok: true, message: 'Track playing!' });
     } catch (error) {
         return respondToSpotifyFailure(res, error, 'play');
@@ -235,16 +240,18 @@ async function geocodeCities(req, res) {
 
     try {
         const url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
-        const response = await fetch(url, {
+        const body = await outboundHttp.get(url, {
+            allowedProtocols: ['https:'],
+            allowedHosts: ['nominatim.openstreetmap.org'],
+            allowedContentTypes: ['application/json'],
+            connectTimeoutMs: 3_000,
+            readTimeoutMs: 5_000,
+            maxBytes: 250_000,
+            maxRedirects: 0,
             headers: { 'User-Agent': 'AIRadioHost/1.0' },
         });
-
-        if (!response.ok) {
-            console.error('Nominatim error:', response.status, response.statusText);
-            return res.status(502).json({ error: 'Geocoding service unavailable' });
-        }
-
-        const results = await response.json();
+        const results = JSON.parse(body.toString('utf8'));
+        if (!Array.isArray(results)) throw new Error('Unexpected geocoding response');
 
         const cities = results.map((item) => {
             const address = item.address || {};
@@ -255,15 +262,15 @@ async function geocodeCities(req, res) {
                 displayName,
                 city,
                 country,
-                latitude: parseFloat(item.lat),
-                longitude: parseFloat(item.lon),
+                latitude: Number.parseFloat(item.lat),
+                longitude: Number.parseFloat(item.lon),
             };
         });
 
         return res.json(cities);
     } catch (error) {
-        console.error('Error in geocodeCities:', error);
-        return res.status(502).json({ error: 'Geocoding service unavailable' });
+        req.log?.warn({ event: 'geocoding_failed', errorCode: error.code || 'invalid_response' });
+        return res.status(502).json({ error: { code: 'geocoding_unavailable', message: 'Geocoding service unavailable' } });
     }
 }
 

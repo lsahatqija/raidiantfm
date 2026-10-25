@@ -1,6 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
 test('restores cookie sessions and isolates browser state across account switches', async ({ page }) => {
+    const browserErrors = [];
+    page.on('console', (message) => {
+        if (['error', 'warning'].includes(message.type())) browserErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => browserErrors.push(error.message));
     let activeUser = {
         id: 'user-a',
         spotifyId: 'spotify-user-a',
@@ -66,6 +71,13 @@ test('restores cookie sessions and isolates browser state across account switche
     await expect(page.getByText('Voice A')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Login with Spotify' })).toHaveCount(0);
 
+    await page.getByText('Privacy', { exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Export my data' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete account' })).toBeVisible();
+    await page.getByRole('button', { name: 'Edit location' }).click();
+    await expect(page.getByText(/Only the city label is stored/)).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
     activeUser = {
         id: 'user-b',
         spotifyId: 'spotify-user-b',
@@ -78,4 +90,5 @@ test('restores cookie sessions and isolates browser state across account switche
     await expect(page.getByText('Voice B')).toBeVisible();
     await expect(page.getByText(/Queued A/)).toHaveCount(0);
     await expect(page.getByText('Voice A')).toHaveCount(0);
+    expect(browserErrors).toEqual([]);
 });

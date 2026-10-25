@@ -13,6 +13,7 @@ export function LocationSelector({
   handleCancelEditLocation,
   handleLocationQueryChange,
   handleSelectLocation,
+  handleClearLocation,
 }) {
   const inputRef = useRef(null);
   const containerRef = useRef(null);
@@ -73,6 +74,9 @@ export function LocationSelector({
             Cancel
           </button>
         </div>
+        <p className="location-consent">
+          Optional: selecting a city lets RaidiantFM fetch local weather. Only the city label is stored.
+        </p>
 
         {isLoadingLocationSuggestions && (
           <p className="location-status">Searching…</p>
@@ -123,6 +127,16 @@ export function LocationSelector({
         >
           {cityLabel ? "Edit" : "Set"}
         </button>
+        {cityLabel ? (
+          <button
+            type="button"
+            className="location-edit-trigger"
+            onClick={handleClearLocation}
+            aria-label="Remove saved location"
+          >
+            Remove
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -17,14 +17,16 @@ async function getMe(req, res) {
             spotifyId: user.spotifyId,
             username: user.username,
             spotifyDisplayName: user.spotifyDisplayName,
-            spotifyEmail: user.spotifyEmail,
-            location: user.location ?? { city: '', latitude: null, longitude: null },
+            location: {
+                city: user.location?.city || '',
+                consentAt: user.location?.consentAt || null,
+            },
             lastVolume: typeof user.lastVolume === 'number' ? user.lastVolume : 0.5,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         });
     } catch (err) {
-        console.error('Error in getMe:', err);
+        req.log?.error({ event: 'profile_fetch_failed', errorCode: err.code || err.name });
         const statusCode = err?.statusCode === 401 ? 401 : 500;
         return res.status(statusCode).json({ error: 'Error fetching user profile' });
     }
@@ -75,12 +77,11 @@ async function updateMe(req, res) {
             spotifyId: updated.spotifyId,
             username: updated.username,
             spotifyDisplayName: updated.spotifyDisplayName,
-            spotifyEmail: updated.spotifyEmail,
             lastVolume: typeof updated.lastVolume === 'number' ? updated.lastVolume : 0.5,
             updatedAt: updated.updatedAt,
         });
     } catch (err) {
-        console.error('Error in updateMe:', err);
+        req.log?.error({ event: 'profile_update_failed', errorCode: err.code || err.name });
         const statusCode = err?.statusCode === 401 ? 401 : 500;
         return res.status(statusCode).json({ error: 'Error updating user profile' });
     }
@@ -89,27 +90,19 @@ async function updateMe(req, res) {
 /**
  * PATCH /api/users/me/location
  * Updates the user's geographic location.
- * Body: { city: string, latitude: number, longitude: number }
+ * Body: { city: string, consent: true }
  * Requires an application session.
  */
 async function updateLocation(req, res) {
-    const { city, latitude, longitude } = req.body || {};
+    const { city, consent } = req.body || {};
 
     if (typeof city !== 'string' || city.trim().length === 0) {
         return res.status(400).json({ error: 'city must be a non-empty string' });
     }
-    if (typeof latitude !== 'number' || latitude < -90 || latitude > 90) {
-        return res.status(400).json({ error: 'latitude must be a number between -90 and 90' });
-    }
-    if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) {
-        return res.status(400).json({ error: 'longitude must be a number between -180 and 180' });
-    }
-
     try {
         const updated = await userService.updateLocationById(req.auth.userId, {
             city: city.trim(),
-            latitude,
-            longitude,
+            consent,
         });
 
         if (!updated) {
@@ -122,10 +115,55 @@ async function updateLocation(req, res) {
             updatedAt: updated.updatedAt,
         });
     } catch (err) {
-        console.error('Error in updateLocation:', err);
+        req.log?.error({ event: 'location_update_failed', errorCode: err.code || err.name });
         const statusCode = err?.statusCode === 401 ? 401 : 500;
         return res.status(statusCode).json({ error: 'Error updating location' });
     }
 }
 
-module.exports = { getMe, updateMe, updateLocation };
+async function clearLocation(req, res) {
+    try {
+        const updated = await userService.clearLocationById(req.auth.userId);
+        if (!updated) return res.status(404).json({ error: { code: 'not_found', message: 'User not found' } });
+        return res.json({ location: { city: '', consentAt: null }, updatedAt: updated.updatedAt });
+    } catch (error) {
+        req.log?.error({ event: 'location_consent_withdrawal_failed', errorCode: error.code });
+        return res.status(500).json({ error: { code: 'location_update_failed', message: 'Unable to remove location' } });
+    }
+}
+
+async function exportAccount(req, res) {
+    try {
+        const data = await userService.exportAccountById(req.auth.userId);
+        if (!data) return res.status(404).json({ error: { code: 'not_found', message: 'User not found' } });
+        res.set('Cache-Control', 'no-store');
+        res.set('Content-Disposition', 'attachment; filename="raidiantfm-account-export.json"');
+        return res.json(data);
+    } catch (error) {
+        req.log?.error({ event: 'account_export_failed', errorCode: error.code });
+        return res.status(500).json({ error: { code: 'account_export_failed', message: 'Unable to export account data' } });
+    }
+}
+
+async function deleteAccount(req, res) {
+    try {
+        const deleted = await userService.deleteAccountById(req.auth.userId);
+        if (!deleted) return res.status(404).json({ error: { code: 'not_found', message: 'User not found' } });
+        req.log?.info({ event: 'account_deleted', actorId: req.auth.userId });
+        const cookie = req.app.locals.sessionCookie;
+        if (cookie?.name) {
+            res.clearCookie(cookie.name, {
+                httpOnly: cookie.httpOnly,
+                secure: cookie.secure,
+                sameSite: cookie.sameSite,
+                path: '/',
+            });
+        }
+        return res.status(204).end();
+    } catch (error) {
+        req.log?.error({ event: 'account_delete_failed', errorCode: error.code });
+        return res.status(500).json({ error: { code: 'account_delete_failed', message: 'Unable to delete account' } });
+    }
+}
+
+module.exports = { getMe, updateMe, updateLocation, clearLocation, exportAccount, deleteAccount };

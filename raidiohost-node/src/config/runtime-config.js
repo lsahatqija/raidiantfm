@@ -52,6 +52,16 @@ function parseEncryptionKey(value) {
     return key.length === 32 && key.toString('base64') === value ? key : null;
 }
 
+function optionalPositiveInteger(environment, name, fallback, errors) {
+    if (!environment[name]?.trim()) return fallback;
+    const value = Number(environment[name]);
+    if (!Number.isInteger(value) || value < 1) {
+        errors.push(`${name} must be a positive integer`);
+        return fallback;
+    }
+    return value;
+}
+
 function loadRuntimeConfig(environment = process.env) {
     const errors = [];
     const missing = new Set();
@@ -138,6 +148,15 @@ function loadRuntimeConfig(environment = process.env) {
         errors.push('SPOTIFY_QUOTA_MODE must be development or extended');
     }
 
+    const jsonBodyLimit = environment.JSON_BODY_LIMIT?.trim() || '16kb';
+    if (!/^\d+(?:b|kb|mb)$/i.test(jsonBodyLimit)) {
+        errors.push('JSON_BODY_LIMIT must be a byte size such as 16kb');
+    }
+    const authRateLimitMax = optionalPositiveInteger(environment, 'AUTH_RATE_LIMIT_MAX', 10, errors);
+    const authRateLimitWindowMs = optionalPositiveInteger(environment, 'AUTH_RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000, errors);
+    const externalRateLimitMax = optionalPositiveInteger(environment, 'EXTERNAL_RATE_LIMIT_MAX', 30, errors);
+    const externalRateLimitWindowMs = optionalPositiveInteger(environment, 'EXTERNAL_RATE_LIMIT_WINDOW_MS', 60 * 1000, errors);
+
     if (nodeEnvironment === 'production') {
         if (redirectUri && redirectUri.protocol !== 'https:') {
             errors.push('REDIRECT_URL must use HTTPS in production');
@@ -170,6 +189,7 @@ function loadRuntimeConfig(environment = process.env) {
         server: {
             port,
             trustProxy,
+            jsonBodyLimit,
         },
         database: {
             uri: environment.MONGODB_URI,
@@ -195,6 +215,10 @@ function loadRuntimeConfig(environment = process.env) {
         },
         tokens: {
             encryptionKey,
+        },
+        rateLimits: {
+            auth: { max: authRateLimitMax, windowMs: authRateLimitWindowMs },
+            external: { max: externalRateLimitMax, windowMs: externalRateLimitWindowMs },
         },
     };
 }

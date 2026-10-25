@@ -19,7 +19,7 @@ describe('useUserProfile session flow', () => {
       spotifyId: 'spotify-a',
       username: 'Listener A',
       spotifyDisplayName: 'Spotify A',
-      location: { city: 'Budapest', latitude: 47.5, longitude: 19.04 },
+      location: { city: 'Budapest', consentAt: '2026-10-25T08:00:00.000Z' },
       lastVolume: 0.4,
     }))
 

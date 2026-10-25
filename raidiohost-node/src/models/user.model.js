@@ -49,11 +49,6 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: '',
         },
-        spotifyEmail: {
-            type: String,
-            default: '',
-        },
-
         // Encrypted Spotify credentials. The complete subdocument is omitted
         // from JSON so encrypted material and lookup fingerprints stay server-only.
         spotifyCredentials: {
@@ -90,12 +85,8 @@ const userSchema = new mongoose.Schema(
                 type: String,
                 default: '',
             },
-            latitude: {
-                type: Number,
-                default: null,
-            },
-            longitude: {
-                type: Number,
+            consentAt: {
+                type: Date,
                 default: null,
             },
         },

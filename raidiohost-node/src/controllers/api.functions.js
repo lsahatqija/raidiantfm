@@ -136,7 +136,6 @@ async function searchTracksSafely(spotifyApi, query, limit = 10, maxSearchLimit 
         const response = await spotifyApi.searchTracks(query, { limit: safeLimit });
         return Array.isArray(response.body?.tracks?.items) ? response.body.tracks.items : [];
     } catch {
-        console.warn('Spotify queue search lookup failed');
         return [];
     }
 }
@@ -177,7 +176,7 @@ async function findSimilarTrack(
             const sourceTrackResponse = await spotifyApi.getTrack(sourceTrackId);
             sourceTrack = sourceTrackResponse.body || sourceTrackInput;
         } catch {
-            console.warn('Spotify source track lookup failed');
+            // Continue with the request-supplied track metadata.
         }
     }
 
@@ -191,7 +190,7 @@ async function findSimilarTrack(
             const artistGenres = Array.isArray(artistResponse.body?.genres) ? artistResponse.body.genres : [];
             matchedGenre = artistGenres[0] || null;
         } catch {
-            console.warn('Spotify artist lookup failed');
+            // Genre enrichment is optional; fallback searches still work.
         }
     }
 
@@ -211,7 +210,7 @@ async function findSimilarTrack(
             });
             addUniqueTracks(candidates, Array.isArray(recommendations.body?.tracks) ? recommendations.body.tracks : []);
         } catch {
-            console.warn('Spotify recommendations lookup failed');
+            // Recommendation failure is non-blocking; later fallbacks remain available.
         }
     }
 
