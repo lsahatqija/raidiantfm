@@ -123,7 +123,7 @@ export function LocationSelector({
           type="button"
           className="location-edit-trigger"
           onClick={handleEditLocation}
-          aria-label="Edit location"
+          aria-label={cityLabel ? "Edit location" : "Set or edit location"}
         >
           {cityLabel ? "Edit" : "Set"}
         </button>

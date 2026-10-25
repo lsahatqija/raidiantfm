@@ -43,11 +43,19 @@ describe('usePwaLifecycle', () => {
   it('detects when iOS Add to Home Screen guidance is useful', () => {
     expect(isIosInstallAvailable({
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+      maxTouchPoints: 0,
+      standalone: false,
+      displayModeStandalone: false,
+    })).toBe(true)
+    expect(isIosInstallAvailable({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+      maxTouchPoints: 5,
       standalone: false,
       displayModeStandalone: false,
     })).toBe(true)
     expect(isIosInstallAvailable({
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+      maxTouchPoints: 0,
       standalone: true,
       displayModeStandalone: false,
     })).toBe(false)

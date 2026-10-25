@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { registerServiceWorker } from './registerServiceWorker.js'
 
-export function isIosInstallAvailable({ userAgent, standalone, displayModeStandalone }) {
-  return /iphone|ipad|ipod/i.test(userAgent) && !standalone && !displayModeStandalone
+export function isIosInstallAvailable({
+  userAgent,
+  maxTouchPoints,
+  standalone,
+  displayModeStandalone,
+}) {
+  const isIos = /iphone|ipad|ipod/i.test(userAgent)
+    || (/macintosh/i.test(userAgent) && maxTouchPoints > 1)
+  return isIos && !standalone && !displayModeStandalone
 }
 
 function canShowIosGuidance() {
   return isIosInstallAvailable({
     userAgent: navigator.userAgent,
+    maxTouchPoints: navigator.maxTouchPoints,
     standalone: navigator.standalone === true,
     displayModeStandalone: window.matchMedia?.('(display-mode: standalone)').matches === true,
   })

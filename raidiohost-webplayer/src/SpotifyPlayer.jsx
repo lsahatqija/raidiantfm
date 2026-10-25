@@ -206,7 +206,7 @@ export default function SpotifyPlayer({
 
     return (
         <section className="spotify-player-section">
-            <p className="song-label">Player</p>
+            <h2 className="song-label">Player</h2>
 
             {error && <p className="song-status song-error">{error}</p>}
 
@@ -248,7 +248,6 @@ export default function SpotifyPlayer({
                                 }
                             }}
                             disabled={!isSpeaking && !queuedTrack}
-                            aria-label={isSpeaking ? 'Skip host, play next track' : queuedTrack ? `Play next track ${queuedTrack.name}` : 'No queued track available'}
                         >
                             <span className="sdk-player-up-next-label">Up Next</span>
                             {queuedTrack ? (
@@ -319,7 +318,8 @@ export default function SpotifyPlayer({
                             }}
                             aria-label="Volume"
                         />
-                        <span
+                        <button
+                            type="button"
                             className="sdk-volume-label"
                             onClick={() => {
                                 const newVol = volume > 0 ? 0 : 0.5;
@@ -328,12 +328,10 @@ export default function SpotifyPlayer({
                                 playerRef.current?.setVolume(newVol);
                                 onVolumeChange?.(newVol);
                             }}
-                            role="button"
-                            tabIndex={0}
                             aria-label={volume === 0 ? 'Unmute' : 'Mute'}
                         >
                             {volume === 0 ? '🔇' : volume < 0.5 ? '🔉' : '🔊'}
-                        </span>
+                        </button>
                     </div>
                 </div>
             )}

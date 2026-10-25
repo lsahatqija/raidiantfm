@@ -216,7 +216,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--bg);
-  background: var(--accent);
+  background: var(--accent-control);
   padding: 1px 4px;
   border-radius: 3px;
 }

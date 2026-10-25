@@ -49,7 +49,7 @@
   padding: 0.625rem 1rem;
   border: 1px solid var(--accent);
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-control);
   color: #fff;
   font: inherit;
   font-weight: 700;
@@ -57,7 +57,7 @@
 }
 
 .pwa-status button:hover {
-  background: #f96b8a;
+  background: var(--accent-control-hover);
 }
 
 .pwa-status .pwa-status-secondary {

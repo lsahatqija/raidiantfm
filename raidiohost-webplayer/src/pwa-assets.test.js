@@ -64,4 +64,14 @@ describe('PWA install assets', () => {
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style"')
     expect(html).toContain('rel="icon" type="image/svg+xml" href="/favicon.svg"')
   })
+
+  it('keeps mutable PWA entry points revalidated and hashed assets immutable', async () => {
+    const nginx = await readProjectFile('nginx.conf')
+
+    expect(nginx).toContain('location = /service-worker.js')
+    expect(nginx).toContain('Cache-Control "no-cache, no-store, must-revalidate"')
+    expect(nginx).toContain('location = /manifest.webmanifest')
+    expect(nginx).toContain('location /assets/')
+    expect(nginx).toContain('Cache-Control "public, immutable"')
+  })
 })

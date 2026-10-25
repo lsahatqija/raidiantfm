@@ -39,7 +39,6 @@
 .voice-selector-personality-badge {
   font-size: 10px;
   font-weight: 500;
-  opacity: 0.7;
   background: var(--accent-bg);
   border-radius: 4px;
   padding: 1px 5px;
@@ -58,6 +57,9 @@
   left: 0;
   z-index: 200;
   width: 270px;
+  max-width: calc(100vw - 1.5rem);
+  max-height: min(32rem, 70dvh);
+  overflow-y: auto;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;

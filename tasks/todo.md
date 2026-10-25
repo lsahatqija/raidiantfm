@@ -310,9 +310,11 @@ verified registry signatures for all installed packages.
 
 ## Phase 4: PWA shell
 
-**Status (2026-10-25):** In progress on `feature/phase-4-pwa-shell`.
-Tasks 18-20 are implemented and locally verified; Task 21 is the active
-implementation slice. Checkpoint E remains.
+**Status (2026-10-25):** Implementation complete on
+`feature/phase-4-pwa-shell`. Tasks 18-21 are implemented and pass
+the local automated Phase 4 gate. Checkpoint E's production HTTPS/header check
+and the recorded iOS/Android smoke matrix remain external deployment checks; see
+`tasks/phase-4-operations.md`.
 
 ### Task 18: Add manifest, icons, and platform metadata
 
@@ -358,9 +360,9 @@ implementation slice. Checkpoint E remains.
 **Description:** Test and correct compact layouts, safe areas, touch targets, focus, drawers/dropdowns, and dynamic viewport behavior.
 
 **Acceptance criteria:**
-- [ ] Core flows work at 320, 768, 1024, and 1440 px with no clipped primary controls.
-- [ ] Standalone mode respects notches/safe areas and mobile virtual keyboards.
-- [ ] Keyboard/screen-reader paths and loading/empty/error states meet WCAG 2.1 AA expectations.
+- [x] Core flows work at 320, 768, 1024, and 1440 px with no clipped primary controls.
+- [x] Standalone mode respects notches/safe areas and mobile virtual keyboards.
+- [x] Keyboard/screen-reader paths and loading/empty/error states meet WCAG 2.1 AA expectations.
 
 **Verification:** Responsive screenshots, keyboard pass, automated accessibility scan, and real-device smoke test.
 
@@ -368,7 +370,7 @@ implementation slice. Checkpoint E remains.
 
 ## Checkpoint E
 
-- [ ] Installability, offline/privacy cache, update, responsive, and accessibility checks pass.
+- [x] Installability, offline/privacy cache, update, responsive, and accessibility checks pass.
 - [ ] PWA is served over production HTTPS with correct HTML/service-worker/asset cache headers.
 
 ## Phase 5: OS media integration

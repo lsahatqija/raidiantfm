@@ -77,7 +77,6 @@ export function VoiceSelector({
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`Voice: ${displayName}, Personality: ${activePersonalityLabel}`}
       >
         <span className="voice-selector-icon" aria-hidden="true">🎙</span>
         <span className="voice-selector-name">{displayName}</span>
@@ -95,6 +94,10 @@ export function VoiceSelector({
               role="option"
               aria-selected={activeVoiceName === null}
               onClick={() => onSelectVoice(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") onSelectVoice(null);
+                  }}
+                  tabIndex={0}
             >
               <span className="voice-selector-voice-name">Default voice</span>
               {activeVoiceName === null && (
@@ -116,6 +119,10 @@ export function VoiceSelector({
                   role="option"
                   aria-selected={isActive}
                   onClick={() => onSelectVoice(v.name)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") onSelectVoice(v.name);
+                  }}
+                  tabIndex={0}
                 >
                   <span className="voice-selector-voice-name">{v.name}</span>
                   <span className="voice-selector-voice-lang">{v.lang}</span>

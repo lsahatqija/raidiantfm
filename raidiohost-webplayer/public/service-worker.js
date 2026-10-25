@@ -3,9 +3,11 @@ const CACHE_VERSION = 'v1'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`
 const ASSET_CACHE = `${CACHE_PREFIX}assets-${CACHE_VERSION}`
 const CURRENT_CACHES = new Set([SHELL_CACHE, ASSET_CACHE])
-const SHELL_ASSETS = [
+const SHELL_DOCUMENTS = [
   '/',
   '/offline.html',
+]
+const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/favicon.svg',
   '/icons/icon-192.png',
@@ -30,15 +32,14 @@ function isNavigationRequest(request) {
   return request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')
 }
 
-function isCacheableAsset(request, url) {
+function isCacheableAsset(url) {
   if (url.origin !== self.location.origin) return false
 
   return (
     url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
     url.pathname.startsWith('/logos/') ||
-    ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname) ||
-    ['font', 'image', 'script', 'style'].includes(request.destination)
+    ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)
   )
 }
 
@@ -57,9 +58,13 @@ async function readBuildAssets() {
 }
 
 async function precacheShell() {
-  const cache = await caches.open(SHELL_CACHE)
   const buildAssets = await readBuildAssets()
-  await cache.addAll([...SHELL_ASSETS, ...buildAssets])
+  const shellCache = await caches.open(SHELL_CACHE)
+  const assetCache = await caches.open(ASSET_CACHE)
+  await Promise.all([
+    shellCache.addAll(SHELL_DOCUMENTS),
+    assetCache.addAll([...STATIC_ASSETS, ...buildAssets]),
+  ])
 }
 
 async function deleteStaleCaches() {
@@ -74,9 +79,7 @@ async function deleteStaleCaches() {
 async function networkFirstNavigation(request) {
   const cache = await caches.open(SHELL_CACHE)
   try {
-    const response = await fetch(request)
-    if (response.ok) await cache.put(request, response.clone())
-    return response
+    return await fetch(request)
   } catch {
     return (
       (await cache.match(request)) ||
@@ -88,7 +91,7 @@ async function networkFirstNavigation(request) {
 
 async function cacheFirstAsset(request) {
   const cache = await caches.open(ASSET_CACHE)
-  const cached = await cache.match(request)
+  const cached = await cache.match(request, { ignoreVary: true })
   if (cached) return cached
 
   const response = await fetch(request)
@@ -120,7 +123,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (isCacheableAsset(request, url)) {
+  if (isCacheableAsset(url)) {
     event.respondWith(cacheFirstAsset(request))
   }
 })
