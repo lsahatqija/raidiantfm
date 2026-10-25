@@ -4,6 +4,7 @@ import { createServer } from 'vite'
 
 const server = await createServer({
   root: 'raidiohost-webplayer',
+  envDir: false,
   logLevel: 'warn',
   server: {
     host: '127.0.0.1',
