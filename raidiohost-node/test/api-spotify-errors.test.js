@@ -60,6 +60,25 @@ describe('Spotify API error contracts', () => {
         });
     });
 
+    it('distinguishes a Development Mode quota exhaustion response', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const app = createAppWithSpotifyError({
+            statusCode: 429,
+            headers: { 'retry-after': '30' },
+            body: { error: { status: 429, reason: 'QUOTA_EXCEEDED' } },
+        });
+
+        const response = await request(app).get('/api/search?q=test');
+
+        expect(response.status).toBe(429);
+        expect(response.body).toEqual({
+            error: {
+                code: 'spotify_quota_exceeded',
+                message: 'Spotify request quota is temporarily exhausted',
+            },
+        });
+    });
+
     it('uses a fixed message for reauthorization errors', async () => {
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
         const app = createAppWithSpotifyError({

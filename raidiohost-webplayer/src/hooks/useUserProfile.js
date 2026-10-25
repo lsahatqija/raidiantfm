@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SERVER_BASE } from "../utils/constants";
+import { apiRequest } from "../api/client";
 
-export function useUserProfile(accessToken) {
+export function useUserProfile(sessionKey) {
   const [userProfile, setUserProfile] = useState(null);
+  const [loadedSessionKey, setLoadedSessionKey] = useState(null);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -23,7 +24,7 @@ export function useUserProfile(accessToken) {
   const volumeSaveDebounceRef = useRef(null);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!sessionKey) {
       return undefined;
     }
 
@@ -35,20 +36,9 @@ export function useUserProfile(accessToken) {
       setProfileError("");
 
       try {
-        const headers = { Authorization: `Bearer ${accessToken}` };
-        const [appProfileRes, spotifyProfileRes] = await Promise.all([
-          fetch(`${SERVER_BASE}/api/users/me`, {
-            headers,
-            signal: controller.signal,
-          }),
-          fetch("https://api.spotify.com/v1/me", {
-            headers,
-            signal: controller.signal,
-          }),
-        ]);
-
-        const appProfileData = await appProfileRes.json().catch(() => null);
-        const spotifyProfileData = await spotifyProfileRes.json().catch(() => null);
+        const appProfileData = await apiRequest('/api/users/me', {
+          signal: controller.signal,
+        });
 
         if (ignore) {
           return;
@@ -57,7 +47,6 @@ export function useUserProfile(accessToken) {
         const primaryName =
           appProfileData?.username ||
           appProfileData?.spotifyDisplayName ||
-          spotifyProfileData?.display_name ||
           "Spotify listener";
 
         const secondaryName =
@@ -66,13 +55,11 @@ export function useUserProfile(accessToken) {
             ? appProfileData.spotifyDisplayName
             : "";
 
-        const profileImage = spotifyProfileData?.images?.[0]?.url || "";
-
         setUserProfile({
           primaryName,
           secondaryName,
-          profileImage,
-          spotifyId: spotifyProfileData?.id || null,
+          profileImage: "",
+          spotifyId: appProfileData?.spotifyId || null,
           lastVolume:
             typeof appProfileData?.lastVolume === "number" &&
             appProfileData.lastVolume >= 0 &&
@@ -84,10 +71,7 @@ export function useUserProfile(accessToken) {
         if (appProfileData?.location) {
           setUserLocation(appProfileData.location);
         }
-
-        if (!appProfileRes.ok && !spotifyProfileRes.ok) {
-          setProfileError("Unable to load your profile right now.");
-        }
+        setLoadedSessionKey(sessionKey);
       } catch (err) {
         if (ignore || err?.name === "AbortError") {
           return;
@@ -102,6 +86,7 @@ export function useUserProfile(accessToken) {
             profileImage: "",
           }
         );
+        setLoadedSessionKey(sessionKey);
       } finally {
         if (!ignore) {
           setIsProfileLoading(false);
@@ -115,7 +100,7 @@ export function useUserProfile(accessToken) {
       ignore = true;
       controller.abort();
     };
-  }, [accessToken]);
+  }, [sessionKey]);
 
   const handleEditName = useCallback(() => {
     setSaveNameError("");
@@ -148,21 +133,11 @@ export function useUserProfile(accessToken) {
     setSaveNameError("");
 
     try {
-      const res = await fetch(`${SERVER_BASE}/api/users/me`, {
+      const data = await apiRequest('/api/users/me', {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: trimmed }),
       });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setSaveNameError(data?.error ?? "Failed to save. Please try again.");
-        return;
-      }
 
       setUserProfile((prev) => ({
         ...prev,
@@ -171,11 +146,11 @@ export function useUserProfile(accessToken) {
       setIsEditingName(false);
     } catch (err) {
       console.error("Failed to save username:", err);
-      setSaveNameError("Failed to save. Please try again.");
+      setSaveNameError(err?.message || "Failed to save. Please try again.");
     } finally {
       setIsSavingName(false);
     }
-  }, [accessToken, editNameValue, userProfile?.primaryName]);
+  }, [editNameValue, userProfile?.primaryName]);
 
   const handleEditLocation = useCallback(() => {
     setSaveLocationError("");
@@ -205,15 +180,7 @@ export function useUserProfile(accessToken) {
     setIsLoadingLocationSuggestions(true);
     locationDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `${SERVER_BASE}/api/geocode?q=${encodeURIComponent(q.trim())}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        if (!res.ok) {
-          setLocationSuggestions([]);
-          return;
-        }
-        const data = await res.json();
+        const data = await apiRequest(`/api/geocode?q=${encodeURIComponent(q.trim())}`);
         setLocationSuggestions(Array.isArray(data) ? data : []);
       } catch {
         setLocationSuggestions([]);
@@ -221,7 +188,7 @@ export function useUserProfile(accessToken) {
         setIsLoadingLocationSuggestions(false);
       }
     }, 500);
-  }, [accessToken]);
+  }, []);
 
   const handleSelectLocation = useCallback(async (suggestion) => {
     setIsSavingLocation(true);
@@ -229,12 +196,9 @@ export function useUserProfile(accessToken) {
     clearTimeout(locationDebounceRef.current);
 
     try {
-      const res = await fetch(`${SERVER_BASE}/api/users/me/location`, {
+      const data = await apiRequest('/api/users/me/location', {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           city: suggestion.displayName,
           latitude: suggestion.latitude,
@@ -242,23 +206,16 @@ export function useUserProfile(accessToken) {
         }),
       });
 
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setSaveLocationError(data?.error ?? "Failed to save location. Please try again.");
-        return;
-      }
-
       setUserLocation(data?.location ?? { city: suggestion.displayName, latitude: suggestion.latitude, longitude: suggestion.longitude });
       setIsEditingLocation(false);
       setLocationQuery("");
       setLocationSuggestions([]);
-    } catch {
-      setSaveLocationError("Failed to save location. Please try again.");
+    } catch (error) {
+      setSaveLocationError(error?.message || "Failed to save location. Please try again.");
     } finally {
       setIsSavingLocation(false);
     }
-  }, [accessToken]);
+  }, []);
 
   const saveLastVolume = useCallback((nextVolume) => {
     if (typeof nextVolume !== "number" || Number.isNaN(nextVolume)) {
@@ -276,26 +233,23 @@ export function useUserProfile(accessToken) {
         : prev,
     );
 
-    if (!accessToken) {
+    if (!sessionKey) {
       return;
     }
 
     clearTimeout(volumeSaveDebounceRef.current);
     volumeSaveDebounceRef.current = setTimeout(async () => {
       try {
-        await fetch(`${SERVER_BASE}/api/users/me`, {
+        await apiRequest('/api/users/me', {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ lastVolume: clampedVolume }),
         });
       } catch (err) {
         console.error("Failed to save last volume:", err);
       }
     }, 300);
-  }, [accessToken]);
+  }, [sessionKey]);
 
   useEffect(() => {
     return () => {
@@ -304,10 +258,10 @@ export function useUserProfile(accessToken) {
   }, []);
 
   return {
-    userProfile: accessToken ? userProfile : null,
+    userProfile: sessionKey === loadedSessionKey ? userProfile : null,
     setUserProfile,
-    isProfileLoading: accessToken ? isProfileLoading : false,
-    profileError: accessToken ? profileError : "",
+    isProfileLoading: Boolean(sessionKey && isProfileLoading),
+    profileError: sessionKey === loadedSessionKey ? profileError : "",
     isEditingName,
     editNameValue,
     setEditNameValue,
@@ -317,7 +271,7 @@ export function useUserProfile(accessToken) {
     handleEditName,
     handleCancelEdit,
     handleSaveName,
-    userLocation,
+    userLocation: sessionKey === loadedSessionKey ? userLocation : null,
     isEditingLocation,
     locationQuery,
     locationSuggestions,

@@ -14,13 +14,19 @@ function trackFor(userId, suffix) {
     };
 }
 
+function userIdFromPlaylist(playlistId) {
+    return playlistId.endsWith('-a') ? 'user-a' : 'user-b';
+}
+
 describe('request-scoped Spotify API routes', () => {
     let app;
     let playCalls;
+    let searchLimits;
 
     beforeEach(() => {
         vi.spyOn(console, 'log').mockImplementation(() => {});
         playCalls = [];
+        searchLimits = [];
 
         const sessionService = {
             resolve: async (token) => token ? {
@@ -30,7 +36,10 @@ describe('request-scoped Spotify API routes', () => {
         };
         const tokenService = {
             execute: async (userId, operation) => operation({
-                searchTracks: async () => ({ body: { tracks: { items: [trackFor(userId, 'search')] } } }),
+                searchTracks: async (_query, { limit }) => {
+                    searchLimits.push(limit);
+                    return { body: { tracks: { items: [trackFor(userId, 'search')] } } };
+                },
                 getMyTopTracks: async () => ({ body: { items: [trackFor(userId, 'top')] } }),
                 getTrack: async () => ({ body: trackFor(userId, 'source') }),
                 getArtist: async () => ({ body: { genres: [] } }),
@@ -45,9 +54,7 @@ describe('request-scoped Spotify API routes', () => {
                     }],
                     total: 1,
                 } }),
-                getPlaylist: async () => ({ body: {
-                    items: { items: [{ item: trackFor(userId, 'playlist-track') }], total: 1 },
-                } }),
+                getAccessToken: () => `token-${userId}`,
                 play: async ({ uris }) => playCalls.push({ userId, uri: uris[0] }),
             }),
         };
@@ -56,21 +63,31 @@ describe('request-scoped Spotify API routes', () => {
         app = express();
         app.use(express.json());
         app.use(cookieParser());
-        app.use('/api', auth, createSpotifyContext(tokenService), createApiRouter());
+        const spotifyContract = {
+            maxSearchLimit: 10,
+            playlistTotalFields: 'items(total)',
+            clampSearchLimit: (limit) => Math.min(Number(limit) || 10, 10),
+            getPlaylistItemTotal: (playlist) => Number(playlist?.items?.total ?? 0),
+            getPlaylistItems: async (_client, playlistId) => ({ body: {
+                items: [{ item: trackFor(userIdFromPlaylist(playlistId), 'playlist-track') }],
+                total: 1,
+            } }),
+        };
+        app.use('/api', auth, createSpotifyContext(tokenService), createApiRouter({ spotifyContract }));
     });
 
     afterEach(() => vi.restoreAllMocks());
 
     it('keeps every Spotify-backed endpoint scoped across concurrent users', async () => {
         const calls = [
-            ['user-a', '/api/search?q=test'],
-            ['user-b', '/api/search?q=test'],
+            ['user-a', '/api/search?q=test&limit=50'],
+            ['user-b', '/api/search?q=test&limit=50'],
             ['user-a', '/api/suggestions'],
             ['user-b', '/api/suggestions'],
             ['user-a', '/api/playlists'],
             ['user-b', '/api/playlists'],
-            ['user-a', '/api/playlist/list-a/tracks'],
-            ['user-b', '/api/playlist/list-b/tracks'],
+            ['user-a', '/api/playlist/list-a/items'],
+            ['user-b', '/api/playlist/list-b/items'],
         ];
         const responses = await Promise.all(calls.map(([userId, path]) => (
             request(app).get(path).set('Cookie', `session=${userId}`)
@@ -84,6 +101,7 @@ describe('request-scoped Spotify API routes', () => {
         expect(responses[5].body.playlists[0].id).toBe('user-b-playlist');
         expect(responses[6].body.tracks[0].id).toBe('user-a-playlist-track');
         expect(responses[7].body.tracks[0].id).toBe('user-b-playlist-track');
+        expect(searchLimits).toEqual([10, 10]);
 
         const [userAQueue, userBQueue, userAPlay, userBPlay] = await Promise.all([
             request(app).post('/api/queue-next').set('Cookie', 'session=user-a')

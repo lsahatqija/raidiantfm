@@ -1,24 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WebSpeechService } from "../services/speech/WebSpeechService";
 import { DEFAULT_PERSONALITY_ID, PERSONALITY_OPTIONS, getPersonalityById } from "../services/speech/voicePresets";
+import { getUserStorage, setUserStorage } from "../utils/userStorage";
 
-const VOICE_NAME_KEY    = "raidiohost-voice-name";
-const SPEECH_RATE_KEY   = "raidiohost-speech-rate";
-const SPEECH_PITCH_KEY  = "raidiohost-speech-pitch";
-const PERSONALITY_KEY   = "raidiohost-personality";
-
-function getStorage(key, defaultValue) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw != null ? JSON.parse(raw) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
-}
-
-function setStorage(key, value) {
-  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* non-fatal */ }
-}
+const VOICE_NAME_KEY = "voice-name";
+const SPEECH_RATE_KEY = "speech-rate";
+const SPEECH_PITCH_KEY = "speech-pitch";
+const PERSONALITY_KEY = "personality";
 
 /**
  * React hook that wraps a SpeechService instance.
@@ -26,18 +14,19 @@ function setStorage(key, value) {
  * @param {import("../services/speech/SpeechService").SpeechService} [serviceInstance]
  *   Optional custom speech service. Defaults to WebSpeechService.
  */
-export function useSpeech(serviceInstance) {
-  const [activeVoiceName, setActiveVoiceNameState]     = useState(() => getStorage(VOICE_NAME_KEY, null));
-  const [speechRate, setSpeechRateState]               = useState(() => getStorage(SPEECH_RATE_KEY, 1.0));
-  const [speechPitch, setSpeechPitchState]             = useState(() => getStorage(SPEECH_PITCH_KEY, 1.0));
-  const [activePersonality, setActivePersonalityState] = useState(() => getStorage(PERSONALITY_KEY, DEFAULT_PERSONALITY_ID));
+export function useSpeech(sessionKey, serviceInstance) {
+  const [, refreshPreferences] = useState(0);
+  const activeVoiceName = getUserStorage(sessionKey, VOICE_NAME_KEY, null);
+  const speechRate = getUserStorage(sessionKey, SPEECH_RATE_KEY, 1.0);
+  const speechPitch = getUserStorage(sessionKey, SPEECH_PITCH_KEY, 1.0);
+  const activePersonality = getUserStorage(sessionKey, PERSONALITY_KEY, DEFAULT_PERSONALITY_ID);
 
   const serviceRef = useRef(null);
   if (serviceRef.current === null) {
     const service = serviceInstance ?? new WebSpeechService({
-      voiceName: getStorage(VOICE_NAME_KEY, null),
-      rate:      getStorage(SPEECH_RATE_KEY, 1.0),
-      pitch:     getStorage(SPEECH_PITCH_KEY, 1.0),
+      voiceName: activeVoiceName,
+      rate: speechRate,
+      pitch: speechPitch,
     });
     serviceRef.current = service;
   }
@@ -49,29 +38,39 @@ export function useSpeech(serviceInstance) {
     return () => { service.cancel(); };
   }, []);
 
+  useEffect(() => {
+    const service = serviceRef.current;
+    service.cancel();
+    service.setVoiceConfig({ voiceName: activeVoiceName, rate: speechRate, pitch: speechPitch });
+  }, [sessionKey, activeVoiceName, speechRate, speechPitch]);
+
   const setActiveVoice = useCallback((name) => {
-    setActiveVoiceNameState(name);
-    setStorage(VOICE_NAME_KEY, name);
+    if (!sessionKey) return;
+    setUserStorage(sessionKey, VOICE_NAME_KEY, name);
+    refreshPreferences((value) => value + 1);
     serviceRef.current.setVoiceConfig({ voiceName: name });
-  }, []);
+  }, [sessionKey]);
 
   const setSpeechRate = useCallback((rate) => {
-    setSpeechRateState(rate);
-    setStorage(SPEECH_RATE_KEY, rate);
+    if (!sessionKey) return;
+    setUserStorage(sessionKey, SPEECH_RATE_KEY, rate);
+    refreshPreferences((value) => value + 1);
     serviceRef.current.setVoiceConfig({ rate });
-  }, []);
+  }, [sessionKey]);
 
   const setSpeechPitch = useCallback((pitch) => {
-    setSpeechPitchState(pitch);
-    setStorage(SPEECH_PITCH_KEY, pitch);
+    if (!sessionKey) return;
+    setUserStorage(sessionKey, SPEECH_PITCH_KEY, pitch);
+    refreshPreferences((value) => value + 1);
     serviceRef.current.setVoiceConfig({ pitch });
-  }, []);
+  }, [sessionKey]);
 
   const setActivePersonality = useCallback((id) => {
+    if (!sessionKey) return;
     const p = getPersonalityById(id);
-    setActivePersonalityState(p.id);
-    setStorage(PERSONALITY_KEY, p.id);
-  }, []);
+    setUserStorage(sessionKey, PERSONALITY_KEY, p.id);
+    refreshPreferences((value) => value + 1);
+  }, [sessionKey]);
 
   const speak = useCallback(async (text) => {
     if (!text) return;

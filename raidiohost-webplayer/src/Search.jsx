@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiRequest } from "./api/client";
 
 function normalizeTrack(track, query) {
   if (!track) {
@@ -52,7 +53,7 @@ function normalizeSearchResponse(data, query) {
   return singleTrack?.uri || singleTrack?.url ? [singleTrack] : [];
 }
 
-export default function Search({ onResultsChange, onManualSearchStart, accessToken }) {
+export default function Search({ onResultsChange, onManualSearchStart }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -65,13 +66,7 @@ export default function Search({ onResultsChange, onManualSearchStart, accessTok
     setLoading(true);
 
     try {
-      const searchUrl = `${import.meta.env.VITE_SERVER_BASE_URL}/api/search`;
-      const res = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
-      console.log(`Search URL: ${searchUrl}?q=${encodeURIComponent(query)}`);
-
-      const data = await res.json();
+      const data = await apiRequest(`/api/search?q=${encodeURIComponent(query)}`);
       const normalizedResults = normalizeSearchResponse(data, query);
 
       onResultsChange?.(normalizedResults);

@@ -24,6 +24,13 @@ function describeSpotifyFailure(error) {
         return { status, code: 'spotify_forbidden', message: 'Spotify denied this request' };
     }
     if (status === 429) {
+        if (error?.body?.error?.reason === 'QUOTA_EXCEEDED') {
+            return {
+                status,
+                code: 'spotify_quota_exceeded',
+                message: 'Spotify request quota is temporarily exhausted',
+            };
+        }
         return { status, code: 'spotify_rate_limited', message: 'Spotify is temporarily rate limited' };
     }
     return { status: 502, code: 'spotify_unavailable', message: 'Spotify is temporarily unavailable' };
@@ -57,7 +64,8 @@ async function search(req, res) {
     }
 
     try {
-        const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit: 10 }));
+        const limit = req.spotifyContract.clampSearchLimit(req.query.limit || 10);
+        const data = await req.spotify.execute((spotifyApi) => spotifyApi.searchTracks(q, { limit }));
         const tracks = data.body.tracks.items.map(mapTrack);
         console.log('Found tracks:', tracks);
         return res.json({ tracks });
@@ -89,7 +97,9 @@ async function queueNext(req, res) {
 
     try {
         const { queuedTrack, matchedGenre, strategy } = await req.spotify.execute(
-            (spotifyApi) => findSimilarTrack(spotifyApi, trackInput, recentTracks),
+            (spotifyApi) => findSimilarTrack(spotifyApi, trackInput, recentTracks, {
+                maxSearchLimit: req.spotifyContract.maxSearchLimit,
+            }),
         );
 
         if (!queuedTrack) {
@@ -128,14 +138,16 @@ async function playlists(req, res) {
             const result = await spotifyApi.getUserPlaylists({ limit, offset });
             const playlistItems = Array.isArray(result.body?.items) ? result.body.items : [];
             const mapped = await Promise.all(playlistItems.map(async (pl) => {
-            let trackCount = Number(pl?.items?.total ?? 0);
+            let trackCount = req.spotifyContract.getPlaylistItemTotal(pl);
 
             // Some playlist payloads can report an empty/partial tracks object.
-            // Fallback to a lightweight playlist lookup to get tracks(total).
+            // Fallback to a lightweight playlist lookup to get items(total).
             if (trackCount <= 0 && pl?.id) {
                 try {
-                    const details = await spotifyApi.getPlaylist(pl.id, { fields: 'tracks(total)' });
-                    trackCount = Number(details.body?.items?.total ?? trackCount);
+                    const details = await spotifyApi.getPlaylist(pl.id, {
+                        fields: req.spotifyContract.playlistTotalFields,
+                    });
+                    trackCount = req.spotifyContract.getPlaylistItemTotal(details.body) || trackCount;
                 } catch (detailsErr) {
                     const failure = describeSpotifyFailure(detailsErr);
                     console.warn('Spotify playlist count lookup failed', {
@@ -168,7 +180,7 @@ async function playlists(req, res) {
 
 async function playlistTracks(req, res) {
     const { id } = req.params;
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 50);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
     if (!id) {
@@ -176,13 +188,15 @@ async function playlistTracks(req, res) {
     }
 
     try {
-        const data = await req.spotify.execute((spotifyApi) => spotifyApi.getPlaylist(id, { limit, offset }));
-        const items = data.body?.items?.items ?? [];
-        const total = data.body?.items?.total ?? 0;
+        const data = await req.spotify.execute((spotifyApi) => (
+            req.spotifyContract.getPlaylistItems(spotifyApi, id, { limit, offset })
+        ));
+        const items = data.body?.items ?? [];
+        const total = data.body?.total ?? 0;
 
         const tracks = items
-            .filter((item) => item?.item?.uri)
-            .map((item) => mapTrack(item.item));
+            .filter((entry) => entry?.item?.uri)
+            .map((entry) => mapTrack(entry.item));
 
         console.log(`Fetched playlist ${id} tracks, offset: ${offset}, returned: ${tracks.length}, total: ${total}`);
 

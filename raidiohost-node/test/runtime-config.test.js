@@ -13,6 +13,7 @@ const validEnvironment = {
     COOKIE_SECURE: 'false',
     SESSION_SECRET: 'session-secret-that-is-at-least-32-characters',
     TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+    SPOTIFY_QUOTA_MODE: 'development',
 };
 
 describe('loadRuntimeConfig', () => {
@@ -32,6 +33,7 @@ describe('loadRuntimeConfig', () => {
                 clientId: 'spotify-client-id',
                 clientSecret: 'spotify-client-secret',
                 redirectUri: 'http://127.0.0.1:8080/auth/callback',
+                quotaMode: 'development',
             },
             web: {
                 appOrigin: 'http://127.0.0.1:8080',
@@ -127,5 +129,17 @@ describe('loadRuntimeConfig', () => {
         })).toThrow(
             'Invalid runtime configuration: SESSION_SECRET and TOKEN_ENCRYPTION_KEY must be different',
         );
+    });
+
+    it('accepts only explicit Spotify quota modes', () => {
+        expect(loadRuntimeConfig({
+            ...validEnvironment,
+            SPOTIFY_QUOTA_MODE: 'extended',
+        }).spotify.quotaMode).toBe('extended');
+
+        expect(() => loadRuntimeConfig({
+            ...validEnvironment,
+            SPOTIFY_QUOTA_MODE: 'automatic',
+        })).toThrow('SPOTIFY_QUOTA_MODE must be development or extended');
     });
 });

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SERVER_BASE } from "../utils/constants";
+import { apiRequest } from "../api/client";
 
-export function usePlaylists(accessToken) {
+export function usePlaylists(sessionKey) {
   const [playlists, setPlaylists] = useState([]);
   const [playlistsOffset, setPlaylistsOffset] = useState(0);
   const [playlistsTotal, setPlaylistsTotal] = useState(0);
   const [isPlaylistsLoading, setIsPlaylistsLoading] = useState(false);
+  const [loadedSessionKey, setLoadedSessionKey] = useState(null);
   const playlistsRef = useRef(null);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!sessionKey) {
       return undefined;
     }
 
@@ -18,14 +19,12 @@ export function usePlaylists(accessToken) {
     const loadPlaylists = async () => {
       setIsPlaylistsLoading(true);
       try {
-        const res = await fetch(`${SERVER_BASE}/api/playlists?limit=50&offset=0`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const data = await res.json();
-        if (!ignore && res.ok && Array.isArray(data?.playlists)) {
+        const data = await apiRequest('/api/playlists?limit=50&offset=0');
+        if (!ignore && Array.isArray(data?.playlists)) {
           setPlaylists(data.playlists);
           setPlaylistsTotal(data.total ?? 0);
           setPlaylistsOffset(data.playlists.length);
+          setLoadedSessionKey(sessionKey);
         }
       } catch (err) {
         console.error("Failed to load playlists:", err);
@@ -39,17 +38,14 @@ export function usePlaylists(accessToken) {
     return () => {
       ignore = true;
     };
-  }, [accessToken]);
+  }, [sessionKey]);
 
   const loadMorePlaylists = useCallback(async () => {
-    if (!accessToken || isPlaylistsLoading || playlistsOffset >= playlistsTotal) return;
+    if (!sessionKey || isPlaylistsLoading || playlistsOffset >= playlistsTotal) return;
     setIsPlaylistsLoading(true);
     try {
-      const res = await fetch(`${SERVER_BASE}/api/playlists?limit=20&offset=${playlistsOffset}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = await res.json();
-      if (res.ok && Array.isArray(data?.playlists)) {
+      const data = await apiRequest(`/api/playlists?limit=20&offset=${playlistsOffset}`);
+      if (Array.isArray(data?.playlists)) {
         setPlaylists((prev) => [...prev, ...data.playlists]);
         setPlaylistsTotal(data.total ?? 0);
         setPlaylistsOffset((prev) => prev + data.playlists.length);
@@ -59,7 +55,7 @@ export function usePlaylists(accessToken) {
     } finally {
       setIsPlaylistsLoading(false);
     }
-  }, [accessToken, isPlaylistsLoading, playlistsOffset, playlistsTotal]);
+  }, [sessionKey, isPlaylistsLoading, playlistsOffset, playlistsTotal]);
 
   const scrollPlaylists = useCallback((direction) => {
     if (!playlistsRef.current) return;
@@ -70,10 +66,10 @@ export function usePlaylists(accessToken) {
   }, []);
 
   return {
-    playlists: accessToken ? playlists : [],
-    playlistsOffset: accessToken ? playlistsOffset : 0,
-    playlistsTotal: accessToken ? playlistsTotal : 0,
-    isPlaylistsLoading: accessToken ? isPlaylistsLoading : false,
+    playlists: sessionKey === loadedSessionKey ? playlists : [],
+    playlistsOffset: sessionKey === loadedSessionKey ? playlistsOffset : 0,
+    playlistsTotal: sessionKey === loadedSessionKey ? playlistsTotal : 0,
+    isPlaylistsLoading: Boolean(sessionKey && isPlaylistsLoading),
     playlistsRef,
     loadMorePlaylists,
     scrollPlaylists,

@@ -16,6 +16,8 @@ module.exports = function configureRoutes(app, runtimeConfig) {
     const spotifyContext = createSpotifyContext(spotifyTokenService);
     app.use('/api/users', requireAuth, createUserRouter());
     app.use('/api/radio', requireAuth, createRadioRouter());
-    app.use('/api', requireAuth, spotifyContext, createApiRouter());
+    app.use('/api', requireAuth, spotifyContext, createApiRouter({
+        quotaMode: runtimeConfig.spotify.quotaMode,
+    }));
     app.use(handleAuthError);
 }

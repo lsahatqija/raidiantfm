@@ -133,6 +133,11 @@ function loadRuntimeConfig(environment = process.env) {
         errors.push('TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
     }
 
+    const spotifyQuotaMode = environment.SPOTIFY_QUOTA_MODE?.trim() || 'development';
+    if (!['development', 'extended'].includes(spotifyQuotaMode)) {
+        errors.push('SPOTIFY_QUOTA_MODE must be development or extended');
+    }
+
     if (nodeEnvironment === 'production') {
         if (redirectUri && redirectUri.protocol !== 'https:') {
             errors.push('REDIRECT_URL must use HTTPS in production');
@@ -173,6 +178,7 @@ function loadRuntimeConfig(environment = process.env) {
             clientId: environment.CLIENT_ID,
             clientSecret: environment.CLIENT_SECRET,
             redirectUri: environment.REDIRECT_URL,
+            quotaMode: spotifyQuotaMode,
         },
         web: {
             appOrigin,

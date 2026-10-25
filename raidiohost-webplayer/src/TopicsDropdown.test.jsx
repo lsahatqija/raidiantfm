@@ -21,7 +21,7 @@ describe('TopicsDropdown', () => {
 
   it('clears the topic search when the dropdown is closed', async () => {
     const user = userEvent.setup()
-    render(<TopicsDropdown accessToken="test-token" />)
+    render(<TopicsDropdown sessionKey="user-a" />)
 
     await user.click(screen.getByRole('button', { name: /radio topics/i }))
     await user.type(screen.getByRole('searchbox'), 'tech')

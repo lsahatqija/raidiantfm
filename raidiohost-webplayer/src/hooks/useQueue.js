@@ -1,34 +1,67 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { MAX_RECENT_TRACKS, QUEUED_TRACK_STORAGE_KEY, RECENT_TRACKS_STORAGE_KEY, SERVER_BASE } from "../utils/constants";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest } from "../api/client";
+import { MAX_RECENT_TRACKS } from "../utils/constants";
 import { normalizeStoredTrack } from "../utils/trackUtils";
+import { getUserStorage, setUserStorage } from "../utils/userStorage";
 
-export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
-  const [selectedTrack, setSelectedTrack] = useState(null);
+const QUEUED_TRACK_STORAGE_NAME = "queued-track";
+const RECENT_TRACKS_STORAGE_NAME = "recent-tracks";
+
+function loadDurableQueue(sessionKey) {
+  const recentTracks = getUserStorage(sessionKey, RECENT_TRACKS_STORAGE_NAME, []);
+  return {
+    sessionKey,
+    queuedTrack: getUserStorage(sessionKey, QUEUED_TRACK_STORAGE_NAME, null),
+    recentTracks: Array.isArray(recentTracks) ? recentTracks : [],
+  };
+}
+
+export function useQueue(sessionKey, { onBeforeNextTrack } = {}) {
+  const sessionEpoch = useMemo(() => Symbol(sessionKey || "anonymous"), [sessionKey]);
+  const [selectedTrackState, setSelectedTrackState] = useState({ sessionEpoch: null, track: null });
+  const selectedTrack = selectedTrackState.sessionEpoch === sessionEpoch ? selectedTrackState.track : null;
+  const setSelectedTrack = useCallback((value) => {
+    setSelectedTrackState((current) => ({
+      sessionEpoch,
+      track: typeof value === "function"
+        ? value(current.sessionEpoch === sessionEpoch ? current.track : null)
+        : value,
+    }));
+  }, [sessionEpoch]);
   const onBeforeNextTrackRef = useRef(onBeforeNextTrack);
   useEffect(() => {
     onBeforeNextTrackRef.current = onBeforeNextTrack;
   }, [onBeforeNextTrack]);
 
-  const [queuedTrack, setQueuedTrack] = useState(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return JSON.parse(window.localStorage.getItem(QUEUED_TRACK_STORAGE_KEY) || "null");
-    } catch {
-      return null;
-    }
-  });
-  const [recentTracks, setRecentTracks] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(RECENT_TRACKS_STORAGE_KEY) || "[]");
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-  const [isQueueLoading, setIsQueueLoading] = useState(false);
-  const [deviceId, setDeviceId] = useState(null);
-  const [playingPlaylistId, setPlayingPlaylistId] = useState(null);
+  const [durableQueueState, setDurableQueueState] = useState(() => loadDurableQueue(sessionKey));
+  const durableQueue = durableQueueState.sessionKey === sessionKey
+    ? durableQueueState
+    : loadDurableQueue(sessionKey);
+  const { queuedTrack, recentTracks } = durableQueue;
+  const setQueuedTrack = useCallback((value) => {
+    if (!sessionKey) return;
+    setDurableQueueState((current) => {
+      const active = current.sessionKey === sessionKey ? current : loadDurableQueue(sessionKey);
+      const queuedTrack = typeof value === "function" ? value(active.queuedTrack) : value;
+      setUserStorage(sessionKey, QUEUED_TRACK_STORAGE_NAME, queuedTrack);
+      return { ...active, queuedTrack };
+    });
+  }, [sessionKey]);
+  const setRecentTracks = useCallback((value) => {
+    if (!sessionKey) return;
+    setDurableQueueState((current) => {
+      const active = current.sessionKey === sessionKey ? current : loadDurableQueue(sessionKey);
+      const recentTracks = typeof value === "function" ? value(active.recentTracks) : value;
+      setUserStorage(sessionKey, RECENT_TRACKS_STORAGE_NAME, recentTracks);
+      return { ...active, recentTracks };
+    });
+  }, [sessionKey]);
+  const [queueLoadingEpoch, setQueueLoadingEpoch] = useState(null);
+  const isQueueLoading = Boolean(sessionKey && queueLoadingEpoch === sessionEpoch);
+  const [deviceState, setDeviceState] = useState({ sessionEpoch: null, id: null });
+  const deviceId = deviceState.sessionEpoch === sessionEpoch ? deviceState.id : null;
+  const [playingPlaylistState, setPlayingPlaylistState] = useState({ sessionEpoch: null, id: null });
+  const playingPlaylistId = playingPlaylistState.sessionEpoch === sessionEpoch ? playingPlaylistState.id : null;
 
   const queuedTrackRef = useRef(queuedTrack);
   const recentTracksRef = useRef(recentTracks);
@@ -40,27 +73,16 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
 
   useEffect(() => {
     queuedTrackRef.current = queuedTrack;
-    if (typeof window === "undefined") return;
-    try {
-      if (queuedTrack) {
-        window.localStorage.setItem(QUEUED_TRACK_STORAGE_KEY, JSON.stringify(queuedTrack));
-      } else {
-        window.localStorage.removeItem(QUEUED_TRACK_STORAGE_KEY);
-      }
-    } catch (err) {
-      console.error("Failed to cache queued track:", err);
-    }
-  }, [queuedTrack]);
+    recentTracksRef.current = recentTracks;
+  }, [queuedTrack, recentTracks]);
 
   useEffect(() => {
-    recentTracksRef.current = recentTracks;
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(RECENT_TRACKS_STORAGE_KEY, JSON.stringify(recentTracks));
-    } catch (err) {
-      console.error("Failed to cache recent tracks:", err);
-    }
-  }, [recentTracks]);
+    queueSourceRef.current = null;
+    autoAdvanceLockRef.current = false;
+    playlistQueueRef.current = [];
+    playlistLoadRef.current += 1;
+    playlistModeRef.current = false;
+  }, [sessionKey]);
 
   const addToRecentTracks = useCallback((track) => {
     const normalizedTrack = normalizeStoredTrack(track);
@@ -71,9 +93,10 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
       );
       return [normalizedTrack, ...deduped].slice(0, MAX_RECENT_TRACKS);
     });
-  }, []);
+  }, [setRecentTracks]);
 
   const requestQueuedTrack = useCallback(async (sourceTrack) => {
+    if (!sessionKey) return null;
     const sourceUri = sourceTrack?.uri || sourceTrack?.id;
     if (!sourceUri) {
       queueSourceRef.current = null;
@@ -82,23 +105,19 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
     }
 
     queueSourceRef.current = sourceUri;
-    setIsQueueLoading(true);
+    setQueueLoadingEpoch(sessionEpoch);
 
     try {
-      const res = await fetch(`${SERVER_BASE}/api/queue-next`, {
+      const data = await apiRequest('/api/queue-next', {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           track: sourceTrack,
           recentTracks: recentTracksRef.current,
         }),
       });
 
-      const data = await res.json();
-      const nextQueuedTrack = res.ok && data?.track ? { ...data.track } : null;
+      const nextQueuedTrack = data?.track ? { ...data.track } : null;
       setQueuedTrack(nextQueuedTrack);
       return nextQueuedTrack;
     } catch (err) {
@@ -106,13 +125,13 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
       setQueuedTrack(null);
       return null;
     } finally {
-      setIsQueueLoading(false);
+      setQueueLoadingEpoch((current) => current === sessionEpoch ? null : current);
     }
-  }, [accessToken]);
+  }, [sessionKey, sessionEpoch, setQueuedTrack]);
 
   const handleDeviceReady = useCallback((id) => {
-    setDeviceId(id);
-  }, []);
+    setDeviceState({ sessionEpoch, id });
+  }, [sessionEpoch]);
 
   const handlePlayerTrackChange = useCallback(
     (track) => {
@@ -124,7 +143,7 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
         requestQueuedTrack(track);
       }
     },
-    [addToRecentTracks, requestQueuedTrack]
+    [addToRecentTracks, requestQueuedTrack, setSelectedTrack]
   );
 
   const handlePlayTrack = useCallback(
@@ -146,9 +165,8 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
         }
 
         try {
-          await fetch(
-            `${SERVER_BASE}/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
-            { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+          await apiRequest(
+            `/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
           );
         } catch (err) {
           console.error("Error starting playback:", err);
@@ -158,16 +176,15 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
       } else {
         if (!deviceId) return;
         try {
-          await fetch(
-            `${SERVER_BASE}/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
-            { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+          await apiRequest(
+            `/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
           );
         } catch (err) {
           console.error("Error starting playback:", err);
         }
       }
     },
-    [accessToken, deviceId, requestQueuedTrack]
+    [deviceId, requestQueuedTrack, setSelectedTrack]
   );
 
   const handleAddToQueue = useCallback((track) => {
@@ -185,7 +202,7 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
     }
 
     setQueuedTrack(trackToAdd);
-  }, []);
+  }, [setQueuedTrack]);
 
   const handlePlayQueuedTrack = useCallback(
     async (track) => {
@@ -204,39 +221,35 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
       if (!deviceId) return;
 
       try {
-        await fetch(
-          `${SERVER_BASE}/api/play?uri=${encodeURIComponent(track.uri)}&device_id=${encodeURIComponent(deviceId)}`,
-          { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+        await apiRequest(
+          `/api/play?uri=${encodeURIComponent(track.uri)}&device_id=${encodeURIComponent(deviceId)}`,
         );
       } catch (err) {
         console.error("Error playing queued track:", err);
       }
     },
-    [accessToken, deviceId]
+    [deviceId, setQueuedTrack]
   );
 
   const handlePlayPlaylist = useCallback(
     async (playlistId) => {
-      if (!accessToken) {
-        console.warn("Cannot load playlist tracks without an access token.");
+      if (!sessionKey) {
         return;
       }
 
       const loadId = Date.now();
       playlistLoadRef.current = loadId;
       playlistQueueRef.current = [];
-      setPlayingPlaylistId(playlistId);
+      setPlayingPlaylistState({ sessionEpoch, id: playlistId });
 
       try {
-        const res = await fetch(
-          `${SERVER_BASE}/api/playlist/${encodeURIComponent(playlistId)}/tracks`,
-          { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+        const data = await apiRequest(
+          `/api/playlist/${encodeURIComponent(playlistId)}/items`,
         );
-        const data = await res.json();
 
         if (playlistLoadRef.current !== loadId) return;
 
-        if (res.ok && Array.isArray(data?.tracks) && data.tracks.length > 0) {
+        if (Array.isArray(data?.tracks) && data.tracks.length > 0) {
           const tracks = data.tracks.filter((t) => t?.uri);
           if (tracks.length === 0) return;
 
@@ -252,20 +265,21 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
 
           if (!deviceId) return;
 
-          await fetch(
-            `${SERVER_BASE}/api/play?uri=${encodeURIComponent(tracks[0].uri)}&device_id=${encodeURIComponent(deviceId)}`,
-            { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+          await apiRequest(
+            `/api/play?uri=${encodeURIComponent(tracks[0].uri)}&device_id=${encodeURIComponent(deviceId)}`,
           );
         }
       } catch (err) {
         console.error("Failed to play playlist:", err);
       } finally {
         if (playlistLoadRef.current === loadId) {
-          setPlayingPlaylistId(null);
+          setPlayingPlaylistState((current) => (
+            current.sessionEpoch === sessionEpoch ? { sessionEpoch, id: null } : current
+          ));
         }
       }
     },
-    [accessToken, deviceId]
+    [sessionKey, sessionEpoch, deviceId, setQueuedTrack]
   );
 
   const handleTrackEnded = useCallback(async () => {
@@ -288,9 +302,8 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
           try { await onBeforeNextTrackRef.current(); } catch { /* TTS must never block playback */ }
         }
         if (deviceId) {
-          await fetch(
-            `${SERVER_BASE}/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
-            { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} }
+          await apiRequest(
+            `/api/play?uri=${encodeURIComponent(nextTrack.uri)}&device_id=${encodeURIComponent(deviceId)}`,
           );
         }
       } finally {
@@ -317,7 +330,7 @@ export function useQueue(accessToken, { onBeforeNextTrack } = {}) {
         autoAdvanceLockRef.current = false;
       }, 1500);
     }
-  }, [accessToken, deviceId, handlePlayTrack]);
+  }, [deviceId, handlePlayTrack, setQueuedTrack]);
 
   return {
     selectedTrack,
