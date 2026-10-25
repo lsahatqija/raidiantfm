@@ -22,7 +22,7 @@ function createRequireAuth({ sessionService = defaultSessionService, cookieName 
 function createSpotifyContext(tokenService) {
     return function spotifyContext(request, _response, next) {
         request.spotify = {
-            execute: (operation) => tokenService.execute(request.auth.userId, operation),
+            execute: (operation) => tokenService.execute(request.auth.userId, operation, request.log),
         };
         next();
     };

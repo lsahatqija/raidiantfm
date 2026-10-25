@@ -99,6 +99,7 @@ describe('secure authentication routes', () => {
         expect(response.status).toBe(302);
         expect(response.headers.location).toBe('https://accounts.spotify.com/authorize?state=oauth-state');
         expect(fixture.oauthTransactionService.create).toHaveBeenCalledWith('/');
+        expect(require('../src/routes/auth.routes').SCOPES).not.toContain('user-read-email');
     });
 
     it('rejects missing, mismatched, expired, or replayed OAuth state before token exchange', async () => {

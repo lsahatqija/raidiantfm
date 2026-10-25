@@ -1,23 +1,24 @@
 require('dotenv-flow').config();
-const express = require('express');
+const mongoose = require('mongoose');
 const { loadRuntimeConfig } = require('./config/runtime-config');
+const { createApp } = require('./app');
+const connectDatabase = require('./startup/db');
+const { createGracefulShutdown } = require('./startup/graceful-shutdown');
+const { logger } = require('./services/logger.service');
 
-const runtimeConfig = loadRuntimeConfig();
-const app = express();
+async function main() {
+    const runtimeConfig = loadRuntimeConfig();
+    await connectDatabase(runtimeConfig);
+    const app = createApp(runtimeConfig);
+    const server = app.listen(runtimeConfig.server.port, () => {
+        logger.info({ event: 'server_started', port: runtimeConfig.server.port });
+    });
+    const shutdown = createGracefulShutdown({ server, database: mongoose, logger });
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
+}
 
-/*const options = {
-    key: fs.readFileSync('./raidiohost-test.local-key.pem'),
-    cert: fs.readFileSync('./raidiohost-test.local.pem')
-};*/
-
-require('./startup/spotify').initialize(runtimeConfig.spotify);
-require('./services/user.service').initializeTokenEncryption(runtimeConfig.tokens.encryptionKey);
-require('./services/oauth-transaction.service').initialize(runtimeConfig.session.secret);
-require('./services/session.service').initialize(runtimeConfig.session.secret);
-require('./startup/db')(runtimeConfig);
-require('./startup/config')(app, runtimeConfig);
-require('./startup/routes')(app, runtimeConfig);
-
-app.listen(runtimeConfig.server.port, () => {
-    console.log(`Server is running on port ${runtimeConfig.server.port}`);
+main().catch((error) => {
+    logger.error({ event: 'startup_failed', errorCode: error.cause?.code || error.code || error.name });
+    process.exitCode = 1;
 });

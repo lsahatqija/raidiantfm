@@ -3,6 +3,7 @@ const RefreshLease = require('../models/refresh-lease.model');
 const spotifyFactory = require('../startup/spotify');
 const userService = require('./user.service');
 const sessionService = require('./session.service');
+const { logger: defaultLogger } = require('./logger.service');
 
 const REFRESH_SKEW_MS = 60_000;
 const LEASE_MS = 10_000;
@@ -34,6 +35,7 @@ function createSpotifyTokenService({
     leases = RefreshLease,
     now = () => new Date(),
     wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    logger = defaultLogger,
 } = {}) {
     async function loadCredentials(userId) {
         const user = await users.findById(userId);
@@ -77,7 +79,8 @@ function createSpotifyTokenService({
         throw new SpotifyAuthError('spotify_refresh_unavailable', 'Spotify authorization refresh is temporarily unavailable', 503);
     }
 
-    async function refresh(userId, observedCredentials) {
+    async function refresh(userId, observedCredentials, operationLogger = logger) {
+        operationLogger.info({ event: 'spotify_refresh_started', actorId: userId });
         const lease = await acquireLease(userId, observedCredentials.version);
         if (lease.credentials) return lease.credentials;
 
@@ -92,6 +95,7 @@ function createSpotifyTokenService({
             } catch (error) {
                 if (isInvalidGrant(error)) {
                     await sessions.revokeAllForUser(userId);
+                    operationLogger.warn({ event: 'spotify_refresh_reauthorization_required', actorId: userId });
                     throw new SpotifyAuthError('reauth_required', 'Spotify authorization has expired');
                 }
                 throw error;
@@ -106,31 +110,32 @@ function createSpotifyTokenService({
                 tokenExpiresAt: new Date(now().getTime() + expiresIn * 1000),
             });
 
+            operationLogger.info({ event: 'spotify_refresh_completed', actorId: userId });
             return replacement ? users.decryptSpotifyCredentials(replacement) : loadCredentials(userId);
         } finally {
             await leases.deleteOne({ userId, ownerId: lease.ownerId });
         }
     }
 
-    async function usableCredentials(userId) {
+    async function usableCredentials(userId, operationLogger) {
         const credentials = await loadCredentials(userId);
         if (new Date(credentials.tokenExpiresAt).getTime() > now().getTime() + REFRESH_SKEW_MS) return credentials;
-        return refresh(userId, credentials);
+        return refresh(userId, credentials, operationLogger);
     }
 
-    async function execute(userId, operation) {
-        let credentials = await usableCredentials(userId);
+    async function execute(userId, operation, operationLogger = logger) {
+        let credentials = await usableCredentials(userId, operationLogger);
         try {
             return await operation(clientFrom(credentials));
         } catch (error) {
             if (!isUnauthorized(error)) throw error;
-            credentials = await refresh(userId, credentials);
+            credentials = await refresh(userId, credentials, operationLogger);
             return operation(clientFrom(credentials));
         }
     }
 
-    async function getAccessToken(userId) {
-        const credentials = await usableCredentials(userId);
+    async function getAccessToken(userId, operationLogger = logger) {
+        const credentials = await usableCredentials(userId, operationLogger);
         return {
             accessToken: credentials.accessToken,
             expiresAt: new Date(credentials.tokenExpiresAt),

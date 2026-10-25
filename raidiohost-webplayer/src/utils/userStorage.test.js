@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   clearLegacyBrowserState,
+  clearUserStorage,
+  exportUserStorage,
   getUserStorage,
   getUserStorageKey,
   setUserStorage,
@@ -40,5 +42,20 @@ describe('userStorage', () => {
     clearLegacyBrowserState()
 
     expect(window.localStorage).toHaveLength(0)
+  })
+
+  it('exports and deletes only the selected account browser state', () => {
+    setUserStorage('user-a', 'recent-tracks', [{ id: 'track-a' }])
+    setUserStorage('user-a', 'voice-name', 'Voice A')
+    setUserStorage('user-b', 'voice-name', 'Voice B')
+
+    expect(exportUserStorage('user-a')).toEqual({
+      'recent-tracks': [{ id: 'track-a' }],
+      'voice-name': 'Voice A',
+    })
+
+    clearUserStorage('user-a')
+    expect(exportUserStorage('user-a')).toEqual({})
+    expect(getUserStorage('user-b', 'voice-name', null)).toBe('Voice B')
   })
 })

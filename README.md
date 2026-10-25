@@ -56,3 +56,7 @@ playlist-item reads to owned or collaborative playlists. See
 [Phase 2 State and Spotify Operations](./tasks/phase-2-operations.md) for the
 browser-retention contract and authorized sandbox smoke procedure.
 
+Production security, privacy retention/deletion, readiness, proxy/CORS, logging,
+and incident requirements are documented in
+[Phase 3 Security, Privacy, and Operations](./tasks/phase-3-operations.md).
+

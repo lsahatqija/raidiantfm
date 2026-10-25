@@ -146,3 +146,11 @@
   font-size: 11px;
   color: #b91c1c;
 }
+
+.location-consent {
+  max-width: 280px;
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text);
+}

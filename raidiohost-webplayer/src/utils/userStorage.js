@@ -46,3 +46,31 @@ export function clearLegacyBrowserState() {
   if (typeof window === 'undefined') return
   for (const key of LEGACY_KEYS) window.localStorage.removeItem(key)
 }
+
+export function exportUserStorage(userId) {
+  if (!userId || typeof window === 'undefined') return {}
+  const prefix = `${STORAGE_PREFIX}:${encodeURIComponent(userId)}:`
+  const exported = {}
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (!key?.startsWith(prefix)) continue
+    const name = key.slice(prefix.length)
+    try {
+      exported[name] = JSON.parse(window.localStorage.getItem(key))
+    } catch {
+      exported[name] = null
+    }
+  }
+  return exported
+}
+
+export function clearUserStorage(userId) {
+  if (!userId || typeof window === 'undefined') return
+  const prefix = `${STORAGE_PREFIX}:${encodeURIComponent(userId)}:`
+  const keys = []
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith(prefix)) keys.push(key)
+  }
+  keys.forEach((key) => window.localStorage.removeItem(key))
+}

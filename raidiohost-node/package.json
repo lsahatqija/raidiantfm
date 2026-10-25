@@ -19,7 +19,6 @@
     "dotenv": "^17.4.2",
     "dotenv-flow": "^4.1.0",
     "express": "^5.2.1",
-    "fs": "^0.0.1-security",
     "helmet": "^8.1.0",
     "mongoose": "^8.13.2",
     "rss-parser": "^3.13.0",

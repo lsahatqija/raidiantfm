@@ -4,9 +4,10 @@ const defaultUserService = require('../services/user.service');
 const defaultOAuthTransactionService = require('../services/oauth-transaction.service');
 const defaultSessionService = require('../services/session.service');
 const { createSpotifyTokenService } = require('../services/spotify-token.service');
+const { validators } = require('../middleware/validation.middleware');
 
 const SCOPES = [
-    'streaming', 'user-read-private', 'user-read-email', 'user-top-read', 'user-library-read',
+    'streaming', 'user-read-private', 'user-top-read', 'user-library-read',
     'playlist-read-private', 'playlist-read-collaborative', 'playlist-modify-public',
     'playlist-modify-private', 'user-read-playback-state', 'user-read-currently-playing',
     'user-modify-playback-state',
@@ -18,6 +19,7 @@ function createAuthRouter({
     sessionService = defaultSessionService,
     spotifyTokenService = createSpotifyTokenService(),
     userService = defaultUserService,
+    authLimiter = (_request, _response, next) => next(),
     config,
 }) {
     const router = express.Router();
@@ -32,14 +34,16 @@ function createAuthRouter({
         maxAge: 30 * 24 * 60 * 60 * 1000,
     };
 
-    router.get('/login', async (_request, response) => {
+    router.get('/login', authLimiter, async (request, response) => {
         const state = await oauthTransactionService.create('/');
+        request.log?.info({ event: 'oauth_login_started' });
         response.redirect(createSpotifyClient().createAuthorizeURL(SCOPES, state, true));
     });
 
-    router.get('/callback', async (request, response) => {
+    router.get('/callback', authLimiter, validators.oauthCallback, async (request, response) => {
         const transaction = await oauthTransactionService.consume(request.query.state);
         if (!transaction) {
+            request.log?.warn({ event: 'oauth_state_rejected' });
             return response.status(400).json({ error: { code: 'invalid_oauth_state', message: 'Sign-in request is invalid or expired' } });
         }
         if (request.query.error) return response.redirect(`${config.web.appOrigin}/?auth=denied`);
@@ -62,8 +66,10 @@ function createAuthRouter({
             await sessionService.revoke(request.cookies?.[config.session.cookie.name]);
             const sessionToken = await sessionService.create(user._id);
             response.cookie(config.session.cookie.name, sessionToken, cookieOptions);
+            request.log?.info({ event: 'session_created', actorId: user._id.toString() });
             return response.redirect(new URL(transaction.returnTo || '/', config.web.appOrigin).toString());
-        } catch {
+        } catch (error) {
+            request.log?.warn({ event: 'oauth_callback_failed', errorCode: error.code || error.name });
             return response.status(502).json({ error: { code: 'spotify_authorization_failed', message: 'Unable to complete Spotify sign-in' } });
         }
     });
@@ -71,6 +77,7 @@ function createAuthRouter({
     router.get('/session', async (request, response) => {
         const session = await sessionService.resolve(request.cookies?.[config.session.cookie.name]);
         if (!session?.userId) {
+            request.log?.warn({ event: 'session_lookup_rejected' });
             return response.status(401).json({ error: { code: 'unauthenticated', message: 'Sign in required' } });
         }
         return response.json({ user: {
@@ -87,7 +94,7 @@ function createAuthRouter({
         }
 
         try {
-            const token = await spotifyTokenService.getAccessToken(session.userId._id.toString());
+            const token = await spotifyTokenService.getAccessToken(session.userId._id.toString(), request.log);
             response.set('Cache-Control', 'no-store');
             return response.json({
                 accessToken: token.accessToken,
@@ -100,6 +107,7 @@ function createAuthRouter({
 
     router.post('/logout', async (request, response) => {
         await sessionService.revoke(request.cookies?.[config.session.cookie.name]);
+        request.log?.info({ event: 'session_revoked' });
         response.clearCookie(config.session.cookie.name, clearCookieOptions);
         return response.status(204).end();
     });

@@ -1,4 +1,5 @@
 const Topic = require('../models/topic.model');
+const { logger } = require('../services/logger.service');
 
 const SYSTEM_TOPICS = [
   // Top News
@@ -428,9 +429,9 @@ async function seedSystemTopics() {
                 )
             )
         );
-        console.log('System topics seeded.');
+        logger.info({ event: 'system_topics_seeded' });
     } catch (err) {
-        console.error('System topic seed failed (non-fatal):', err.message);
+        logger.warn({ event: 'system_topics_seed_failed', errorCode: err.code || err.name });
     }
 }
 

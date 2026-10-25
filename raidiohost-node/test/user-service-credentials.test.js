@@ -30,11 +30,14 @@ describe('user service Spotify credentials', () => {
         );
 
         const update = updateSpy.mock.calls[0][1];
-        expect(update.$unset).toEqual({
+        expect(update.$unset).toEqual(expect.objectContaining({
             accessToken: 1,
             refreshToken: 1,
             tokenExpiresAt: 1,
-        });
+            spotifyEmail: 1,
+            'location.latitude': 1,
+            'location.longitude': 1,
+        }));
         expect(JSON.stringify(update.$set.spotifyCredentials)).not.toContain('raw-access-token');
         expect(JSON.stringify(update.$set.spotifyCredentials)).not.toContain('raw-refresh-token');
         expect(update.$set.spotifyCredentials.refreshTokenHash).toBe(

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiRequest, subscribeToUnauthorized } from '../api/client'
 import { LEGACY_AUTH_STORAGE_KEY, SERVER_BASE } from '../utils/constants'
-import { clearLegacyBrowserState } from '../utils/userStorage'
+import { clearLegacyBrowserState, clearUserStorage } from '../utils/userStorage'
 
 export function useAuth() {
   const [authStatus, setAuthStatus] = useState('loading')
@@ -87,12 +87,20 @@ export function useAuth() {
     }
   }, [])
 
+  const handleAccountDeleted = useCallback(() => {
+    clearUserStorage(user?.id)
+    setUser(null)
+    setAuthStatus('anonymous')
+    setAuthError('Your RaidiantFM account was deleted.')
+  }, [user?.id])
+
   return {
     authError,
     authStatus,
     getSpotifyAccessToken,
     handleLogin,
     handleLogout,
+    handleAccountDeleted,
     isAuthenticated: authStatus === 'authenticated',
     isAuthLoading: authStatus === 'loading',
     user,

@@ -17,6 +17,7 @@ import { LocationSelector } from "./LocationSelector";
 import { ArticlePanel } from "./ArticlePanel";
 import { apiRequest } from "./api/client";
 import { getUserStorage } from "./utils/userStorage";
+import { PrivacyControls } from "./PrivacyControls";
 
 function shuffleItems(items) {
   const nextItems = [...items];
@@ -35,6 +36,7 @@ function App() {
     getSpotifyAccessToken,
     handleLogin,
     handleLogout,
+    handleAccountDeleted,
     isAuthenticated,
     isAuthLoading,
     user,
@@ -85,6 +87,7 @@ function App() {
     handleCancelEditLocation,
     handleLocationQueryChange,
     handleSelectLocation,
+    handleClearLocation,
     saveLastVolume,
   } = useUserProfile(sessionKey);
 
@@ -332,6 +335,7 @@ function App() {
                   handleCancelEditLocation={handleCancelEditLocation}
                   handleLocationQueryChange={handleLocationQueryChange}
                   handleSelectLocation={handleSelectLocation}
+                  handleClearLocation={handleClearLocation}
                 />
               </div>
 
@@ -368,6 +372,7 @@ function App() {
               <button type="button" className="profile-edit-trigger" onClick={handleLogout}>
                 Log out
               </button>
+              <PrivacyControls onAccountDeleted={handleAccountDeleted} userId={user?.id} />
             </div>
           ) : (
             <div className="header-search-placeholder" aria-hidden="true" />

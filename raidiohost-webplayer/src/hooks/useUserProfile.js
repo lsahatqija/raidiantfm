@@ -201,17 +201,30 @@ export function useUserProfile(sessionKey) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           city: suggestion.displayName,
-          latitude: suggestion.latitude,
-          longitude: suggestion.longitude,
+          consent: true,
         }),
       });
 
-      setUserLocation(data?.location ?? { city: suggestion.displayName, latitude: suggestion.latitude, longitude: suggestion.longitude });
+      setUserLocation(data?.location ?? { city: suggestion.displayName, consentAt: new Date().toISOString() });
       setIsEditingLocation(false);
       setLocationQuery("");
       setLocationSuggestions([]);
     } catch (error) {
       setSaveLocationError(error?.message || "Failed to save location. Please try again.");
+    } finally {
+      setIsSavingLocation(false);
+    }
+  }, []);
+
+  const handleClearLocation = useCallback(async () => {
+    setIsSavingLocation(true);
+    setSaveLocationError("");
+    try {
+      const data = await apiRequest('/api/users/me/location', { method: 'DELETE' });
+      setUserLocation(data?.location ?? { city: '', consentAt: null });
+      setIsEditingLocation(false);
+    } catch (error) {
+      setSaveLocationError(error?.message || "Failed to remove location. Please try again.");
     } finally {
       setIsSavingLocation(false);
     }
@@ -282,6 +295,7 @@ export function useUserProfile(sessionKey) {
     handleCancelEditLocation,
     handleLocationQueryChange,
     handleSelectLocation,
+    handleClearLocation,
     saveLastVolume,
   };
 }
