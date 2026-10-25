@@ -311,8 +311,8 @@ verified registry signatures for all installed packages.
 ## Phase 4: PWA shell
 
 **Status (2026-10-25):** In progress on `feature/phase-4-pwa-shell`.
-Task 18 is implemented and locally verified; Task 19 is the active implementation
-slice. Tasks 20-21 and Checkpoint E remain.
+Tasks 18-19 are implemented and locally verified; Task 20 is the active
+implementation slice. Task 21 and Checkpoint E remain.
 
 ### Task 18: Add manifest, icons, and platform metadata
 
@@ -332,9 +332,9 @@ slice. Tasks 20-21 and Checkpoint E remain.
 **Description:** Implement versioned shell precaching, navigation fallback, explicit network-only private routes, and cache cleanup.
 
 **Acceptance criteria:**
-- [ ] Cold offline launch renders a useful offline shell and cached local assets.
-- [ ] Auth, Spotify, user, playlist, private topic, playback, and mutation responses never enter Cache Storage.
-- [ ] Old cache versions are removed without deleting unrelated origin storage.
+- [x] Cold offline launch renders a useful offline shell and cached local assets.
+- [x] Auth, Spotify, user, playlist, private topic, playback, and mutation responses never enter Cache Storage.
+- [x] Old cache versions are removed without deleting unrelated origin storage.
 
 **Verification:** Browser tests inspect caches online/offline and assert private response exclusion.
 
